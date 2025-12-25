@@ -1,0 +1,25 @@
+# Node dependencies
+node_modules/
+dist/
+npm-debug.log*
+
+# Environment secrets (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build outputs
+frontend/dist/
+backend/dist/
+
+# Logs
+logs
+*.log
