@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface Event {
   id: number;
@@ -13,6 +14,7 @@ const Dashboard = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -97,7 +99,10 @@ const Dashboard = () => {
                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700">
                        /{event.slug}
                      </span>
-                     <button className="text-sm font-medium text-white hover:text-indigo-400 transition-colors">
+                     <button 
+                       onClick={() => navigate(`/dashboard/event/${event.id}`)}
+                       className="text-sm font-medium text-white hover:text-indigo-400 transition-colors"
+                     >
                        View Album →
                      </button>
                   </div>

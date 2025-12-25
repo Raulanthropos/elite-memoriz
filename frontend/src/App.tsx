@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import EventDetails from './pages/EventDetailsPage';
 import { supabase } from './lib/supabase';
+import './index.css'; // Explicit import to ensure Tailwind loads
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -40,6 +42,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard/event/:id" 
+            element={
+              <ProtectedRoute>
+                <EventDetails />
               </ProtectedRoute>
             } 
           />

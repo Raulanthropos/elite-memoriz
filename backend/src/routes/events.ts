@@ -104,7 +104,7 @@ router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: R
     const publicUrl = await StorageService.uploadFile(file, storagePath);
 
     // 4. AI Processing
-    const aiStory = memory ? await AIService.rewriteMemory(memory) : '';
+    const aiStory = await AIService.rewriteMemory(memory || '', file.buffer, file.mimetype);
 
     // 5. Save to DB
     await db.transaction(async (tx) => {
