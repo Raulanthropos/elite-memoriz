@@ -32,7 +32,10 @@ class SupabaseProvider implements IStorageProvider {
   async uploadFile(file: Express.Multer.File, path: string) {
     const { data, error } = await this.client.storage
       .from('uploads')
-      .upload(path, file.buffer);
+      .upload(path, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+      });
     if (error) throw error;
     return data.path;
   }
