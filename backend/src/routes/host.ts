@@ -3,6 +3,7 @@ import { db } from '../db';
 import * as schema from '../db/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { StorageService } from '../services/storage';
 
 const router = Router();
 
@@ -121,12 +122,9 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
     }
 
     // Check event ownership
-    // Accessing relation if loaded, otherwise query
     const associatedEvent = memory.event; 
     
-    // Safety check just in case relation wasn't returned
     if (!associatedEvent) {
-         // Fallback manual query
          const evt = await db.query.events.findFirst({
             where: eq(schema.events.id, memory.eventId)
          });
@@ -146,5 +144,50 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// DELETE /memories/:id - Hard delete memory
+router.delete('/memories/:id', async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const memoryId = parseInt(req.params.id);
+  
+      if (isNaN(memoryId)) {
+        return res.status(400).json({ message: 'Invalid memory ID' });
+      }
+  
+      // 1. Verify ownership
+      const memory = await db.query.memories.findFirst({
+          where: eq(schema.memories.id, memoryId),
+          with: { event: true }
+      });
+  
+      if (!memory) return res.status(404).json({ message: 'Memory not found' });
+  
+      // Check event ownership
+      const associatedEvent = memory.event 
+          || await db.query.events.findFirst({ where: eq(schema.events.id, memory.eventId) });
+      
+      if (!associatedEvent || associatedEvent.userId !== userId) {
+          return res.status(403).json({ message: 'Unauthorized' });
+      }
+  
+      // 2. Delete from Storage
+      try {
+          if (memory.storagePath) {
+              await StorageService.deleteFile(memory.storagePath);
+          }
+      } catch (storageErr) {
+          console.error('Storage deletion failed, but proceeding with DB delete:', storageErr);
+      }
+      
+      // 3. Delete from DB
+      await db.delete(schema.memories).where(eq(schema.memories.id, memoryId));
+  
+      res.json({ message: 'Memory deleted permanently' });
+    } catch (error) {
+      console.error('Error deleting memory:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
 export const hostRoutes = router;

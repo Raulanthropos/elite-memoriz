@@ -54,7 +54,16 @@ router.get('/:slug', async (req: Request, res: Response) => {
 router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
-    const { memory } = req.body;
+    let { memory } = req.body; // Multer parses this
+
+    // Fix: Multer often reads non-ASCII form-data as latin1. Force conversion to UTF-8.
+    let cleanOriginal = memory || '';
+    if (memory) {
+        cleanOriginal = Buffer.from(memory, 'latin1').toString('utf8');
+    }
+    
+    console.log('Saving to DB - Original:', cleanOriginal);
+
     const file = req.file;
 
     if (!file) {
@@ -111,7 +120,7 @@ router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: R
     const publicUrl = await StorageService.uploadFile(file, storagePath);
 
     // 4. AI Processing
-    const aiStory = await AIService.rewriteMemory(memory || '', file.buffer, file.mimetype);
+    const aiStory = await AIService.rewriteMemory(cleanOriginal, file.buffer, file.mimetype);
 
     // 5. Save to DB
     await db.transaction(async (tx) => {
@@ -120,7 +129,7 @@ router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: R
         eventId: event.id,
         type: 'photo',
         storagePath: storagePath, 
-        originalText: memory || '',
+        originalText: cleanOriginal,
         aiStory: aiStory,
         fileSize: file.size,
         isApproved: false,

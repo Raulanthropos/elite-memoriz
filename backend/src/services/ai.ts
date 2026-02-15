@@ -6,6 +6,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export const AIService = {
   rewriteMemory: async (rawText: string, imageBuffer?: Buffer, mimeType?: string): Promise<string> => {
     try {
+      console.log('[AIService] Input RawText:', rawText);
       const messages: any[] = [
         {
           role: "system",
@@ -36,7 +37,10 @@ export const AIService = {
         max_tokens: 300,
       });
 
-      return response.choices[0].message.content || rawText;
+      const content = response.choices[0].message.content || rawText;
+      
+      // Force UTF-8 encoding to prevent ??? issues
+      return Buffer.from(content, 'utf-8').toString();
     } catch (error) {
       console.error('AI ERROR:', error);
       return rawText; // Fallback to original text if AI fails
