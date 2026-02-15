@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, Loader2, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
 
 interface EventDetails {
   id: number;
@@ -31,6 +31,10 @@ export const GuestEventPage: React.FC = () => {
   const [event, setEvent] = useState<EventDetails | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   
@@ -43,7 +47,6 @@ export const GuestEventPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Parallel fetch for speed
         const [eventRes, memoriesRes] = await Promise.all([
             fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}`),
             fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/memories`)
@@ -68,18 +71,24 @@ export const GuestEventPage: React.FC = () => {
     fetchData();
   }, [slug]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
+    // Create Preview
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setSelectedFile(file);
     setSuccess(false);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
 
     const formData = new FormData();
-    formData.append('photo', file);
-    
-    // Combine Name and Caption into one metadata string if desired, or send separately.
-    // For now, based on previous backend logic which accepts 'memory' as text:
+    formData.append('photo', selectedFile);
     const finalCaption = `${caption} - Uploaded by ${guestName}`.trim();
     formData.append('memory', finalCaption); 
 
@@ -95,10 +104,13 @@ export const GuestEventPage: React.FC = () => {
       }
 
       setSuccess(true);
-      // Reset after 3 seconds
+      
+      // Cleanup Preview after success
       setTimeout(() => {
           setSuccess(false);
-          setCaption(''); // Clear caption but keep name
+          setCaption('');
+          setSelectedFile(null);
+          setPreviewUrl(null);
       }, 3000);
 
     } catch (err) {
@@ -109,8 +121,14 @@ export const GuestEventPage: React.FC = () => {
     }
   };
 
-  const triggerCamera = () => {
+  const triggerPicker = () => {
       fileInputRef.current?.click();
+  };
+
+  const cancelPreview = () => {
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   if (loading) {
@@ -122,7 +140,7 @@ export const GuestEventPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 font-sans">
+    <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
       {/* 1. Header */}
       <div className="bg-white shadow-sm p-6 text-center sticky top-0 z-20">
         <h1 className="text-2xl font-serif text-gray-900 mb-1">{event.title}</h1>
@@ -135,72 +153,107 @@ export const GuestEventPage: React.FC = () => {
         )}
       </div>
 
-      {/* 2. Upload Action Area */}
-      <div className="p-6 flex flex-col items-center gap-4 bg-white border-b border-gray-100 shadow-sm mb-6">
+      {/* 2. Main Action Area */}
+      <div className="p-6 flex flex-col items-center gap-4 bg-white border-b border-gray-100 shadow-sm mb-6 transition-all duration-300">
         
-        {/* Inputs */}
-        <div className="w-full max-w-sm space-y-3">
-            <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Your Name</label>
-                <input 
-                    type="text" 
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    placeholder="e.g. Aunt Maria"
-                />
-            </div>
-            <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Memory / Caption</label>
-                <textarea 
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none"
-                    placeholder="Write a sweet messsage..."
-                    rows={2}
-                />
-            </div>
-        </div>
-
-        {/* Hidden Input */}
+        {/* Hidden Input (Note: removed 'capture' attribute) */}
         <input 
           type="file" 
           accept="image/*" 
-          capture="environment" 
           className="hidden" 
           ref={fileInputRef}
           onChange={handleFileSelect}
         />
 
-        {/* Action Button */}
-        <div className="mt-2">
-            {!uploading && !success && (
-            <button 
-                onClick={triggerCamera}
-                className="w-40 h-40 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 shadow-lg shadow-purple-200 flex flex-col items-center justify-center text-white active:scale-95 transition-transform"
-            >
-                <Camera className="w-10 h-10 mb-2" />
-                <span className="font-bold text-lg">Share Photo</span>
-            </button>
-            )}
-
-            {uploading && (
-            <div className="w-40 h-40 rounded-full bg-white border-4 border-purple-100 flex flex-col items-center justify-center text-purple-600">
-                <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                <span className="font-medium text-sm">Uploading...</span>
+        {/* --- DEFAULT STATE: No File Selected --- */}
+        {!selectedFile && !success && (
+            <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
+                <button 
+                    onClick={triggerPicker}
+                    className="w-40 h-40 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 shadow-xl shadow-purple-200 flex flex-col items-center justify-center text-white active:scale-95 transition-transform"
+                >
+                    <Camera className="w-10 h-10 mb-2" />
+                    <span className="font-bold text-lg">Share Memory</span>
+                </button>
+                <p className="text-xs text-gray-400 mt-4 max-w-xs">
+                    Tap to take a photo or select from gallery
+                </p>
             </div>
-            )}
+        )}
 
-            {success && (
-            <div className="w-40 h-40 rounded-full bg-green-50 border-4 border-green-100 flex flex-col items-center justify-center text-green-600 animate-in zoom-in duration-300">
-                <CheckCircle2 className="w-10 h-10 mb-2" />
-                <span className="font-bold text-sm">Sent!</span>
+        {/* --- PREVIEW MODE: File Selected --- */}
+        {selectedFile && !uploading && !success && (
+            <div className="w-full max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300">
+                
+                {/* Image Preview */}
+                <div className="relative w-full bg-black rounded-xl overflow-hidden shadow-md group">
+                    <img 
+                        src={previewUrl!} 
+                        alt="Preview" 
+                        className="w-full h-auto max-h-[300px] object-contain mx-auto"
+                    />
+                    <button 
+                        onClick={cancelPreview}
+                        className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-red-500/80 transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Inputs */}
+                <div className="space-y-3">
+                    <div>
+                        <input 
+                            type="text" 
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none transition-all"
+                            placeholder="Your Name (e.g. Aunt Maria)"
+                        />
+                    </div>
+                    <div>
+                        <textarea 
+                            value={caption}
+                            onChange={(e) => setCaption(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none resize-none transition-all"
+                            placeholder="Add a sweet caption..."
+                            rows={2}
+                        />
+                    </div>
+                </div>
+
+                {/* Send Button */}
+                <button 
+                    onClick={handleUpload}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                >
+                    <Send size={18} />
+                    Send Memory
+                </button>
             </div>
-            )}
-        </div>
-        <p className="text-xs text-gray-400 text-center max-w-xs">
-            Tap above to take a photo or choose from gallery.
-        </p>
+        )}
+
+        {/* --- UPLOADING STATE --- */}
+        {uploading && (
+          <div className="flex flex-col items-center py-6">
+            <div className="w-20 h-20 rounded-full bg-white border-4 border-purple-100 flex items-center justify-center text-purple-600 mb-4">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+            <span className="font-bold text-gray-600">Sending...</span>
+          </div>
+        )}
+
+        {/* --- SUCCESS STATE --- */}
+        {success && (
+          <div className="flex flex-col items-center py-6 animate-in zoom-in duration-300">
+            <div className="w-24 h-24 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
+                <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
+            <p className="text-gray-500 text-sm">The host will approve it shortly.</p>
+          </div>
+        )}
+
       </div>
 
       {/* 3. Live Gallery */}
