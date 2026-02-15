@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { db } from './src/db';
-import { events } from './src/db/schema';
+import { db } from './db';
+import { events } from './db/schema';
 import dotenv from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid'; // or just hardcode if uuid not installed

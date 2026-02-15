@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
-const db_1 = require("./src/db");
-const schema_1 = require("./src/db/schema");
+const db_1 = require("./db");
+const schema_1 = require("./db/schema");
 const dotenv_1 = __importDefault(require("dotenv"));
 const drizzle_orm_1 = require("drizzle-orm");
 dotenv_1.default.config();
