@@ -11,7 +11,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173', // Frontend URL
+  origin: ['http://localhost:5173', 'https://elite-memoriz.vercel.app'], // Frontend URL
   credentials: true,
 }));
 app.use(express.json());
