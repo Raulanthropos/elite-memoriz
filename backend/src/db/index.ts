@@ -7,6 +7,7 @@ dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  client_encoding: 'UTF8', // Forces the client to use UTF-8
 });
 
 export const db = drizzle(pool, { schema });

@@ -24,12 +24,23 @@ export const events = pgTable('events', {
   spotifyUrl: text('spotify_url'),
   slug: varchar('slug', { length: 255 }).notNull().unique(), // The "unguessable" URL
   password: text('password'), // Optional event protection
+  category: text('category', { enum: ['wedding', 'baptism', 'party', 'other'] }).default('other').notNull(),
   package: text('package', { enum: packageTiers }).default('BASIC').notNull(),
   storageUsed: integer('storage_used').default(0), // Tracked in bytes or KB
   isExpired: boolean('is_expired').default(false),
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const profiles = pgTable('profiles', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(), // Supabase Auth UUID
+  email: text('email').notNull(),
+  role: text('role', { enum: ['admin', 'host'] }).default('host').notNull(),
+  tier: text('tier', { enum: packageTiers }).default('BASIC').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 
 export const memories = pgTable('memories', {
   id: serial('id').primaryKey(),
