@@ -18,7 +18,7 @@ router.post('/register-profile', async (req: AuthRequest, res: Response) => {
 
     // Check if exists
     const existing = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
     });
 
     if (existing) {
@@ -26,7 +26,7 @@ router.post('/register-profile', async (req: AuthRequest, res: Response) => {
     }
 
     const [newProfile] = await db.insert(schema.profiles).values({
-        userId,
+        id: userId,
         email,
         role: 'host',
         tier: 'BASIC'
@@ -44,7 +44,7 @@ router.get('/profile', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const profile = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
     });
     if (!profile) return res.status(404).json({ message: 'Profile not found' });
     res.json(profile);
@@ -61,7 +61,7 @@ router.get('/events', async (req: AuthRequest, res: Response) => {
 
     // Fetch Profile
     const profile = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
     });
 
     if (!profile) {
@@ -94,15 +94,15 @@ router.get('/events', async (req: AuthRequest, res: Response) => {
 router.get('/events/:id/memories', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const eventId = parseInt(req.params.id);
-
-    if (isNaN(eventId)) {
+    const eventId = req.params.id;
+    
+    if (!eventId) {
       return res.status(400).json({ message: 'Invalid event ID' });
     }
 
     // Fetch Profile for RBAC
     const profile = await db.query.profiles.findFirst({
-         where: eq(schema.profiles.userId, userId)
+         where: eq(schema.profiles.id, userId)
     });
 
     // Verify ownership or Admin
@@ -140,7 +140,7 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
     }
 
     const profile = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
     });
 
     if (!profile) return res.status(404).json({ message: 'Profile not found' });
@@ -193,7 +193,7 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
 
     // Fetch Profile
     const profile = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
     });
 
     // 1. Verify ownership: The memory must belong to an event owned by the host
@@ -243,7 +243,7 @@ router.delete('/memories/:id', async (req: AuthRequest, res: Response) => {
       }
   
       const profile = await db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId)
+        where: eq(schema.profiles.id, userId)
       });
 
       // 1. Verify ownership
