@@ -50,6 +50,33 @@ router.get('/:slug', async (req: Request, res: Response) => {
   }
 });
 
+// GET /:slug/memories - Fetch approved memories for public gallery
+router.get('/:slug/memories', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    
+    const event = await db.query.events.findFirst({
+      where: eq(events.slug, slug),
+    });
+
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const eventMemories = await db.query.memories.findMany({
+      where: and(
+        eq(memories.eventId, event.id),
+        eq(memories.isApproved, true)
+      ),
+      orderBy: (memories, { desc }) => [desc(memories.createdAt)],
+      limit: 50
+    });
+
+    res.json(eventMemories);
+  } catch (error) {
+    console.error('Error fetching memories:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // POST /:slug/upload - Guest upload
 router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: Response) => {
   try {
