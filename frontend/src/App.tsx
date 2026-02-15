@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateEvent from './pages/CreateEvent';
 import EventDetails from './pages/EventDetailsPage';
@@ -29,6 +30,7 @@ function App() {
       <div className="min-h-screen bg-gray-900 text-white font-sans antialiased">
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           
           {/* Guest Route */}
           <Route path="/e/:slug" element={<GuestEventPage />} />

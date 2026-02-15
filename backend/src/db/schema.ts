@@ -32,6 +32,16 @@ export const events = pgTable('events', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const profiles = pgTable('profiles', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().unique(), // Supabase Auth UUID
+  email: text('email').notNull(),
+  role: text('role', { enum: ['admin', 'host'] }).default('host').notNull(),
+  tier: text('tier', { enum: packageTiers }).default('BASIC').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+
 export const memories = pgTable('memories', {
   id: serial('id').primaryKey(),
   eventId: integer('event_id').references(() => events.id),
