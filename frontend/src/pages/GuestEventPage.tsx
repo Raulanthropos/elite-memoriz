@@ -45,8 +45,8 @@ export const GuestEventPage: React.FC = () => {
       try {
         // Parallel fetch for speed
         const [eventRes, memoriesRes] = await Promise.all([
-            fetch(`http://localhost:4000/api/events/${slug}`),
-            fetch(`http://localhost:4000/api/events/${slug}/memories`)
+            fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}`),
+            fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/memories`)
         ]);
 
         if (!eventRes.ok) throw new Error('Event not found');
@@ -84,7 +84,7 @@ export const GuestEventPage: React.FC = () => {
     formData.append('memory', finalCaption); 
 
     try {
-      const res = await fetch(`http://localhost:4000/api/events/${slug}/upload`, {
+      const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/upload`, {
         method: 'POST',
         body: formData,
       });

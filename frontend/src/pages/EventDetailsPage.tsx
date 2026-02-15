@@ -189,7 +189,7 @@ const EventDetailsPage = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch(`http://localhost:4000/api/host/memories/${memoryId}`, {
+        const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/memories/${memoryId}`, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`,
@@ -218,7 +218,7 @@ const EventDetailsPage = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch(`http://localhost:4000/api/host/memories/${memoryId}`, {
+        const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/memories/${memoryId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`
@@ -241,7 +241,7 @@ const EventDetailsPage = () => {
         if (!session) throw new Error('No session');
 
         // Fetch Memories
-        const memoriesRes = await fetch(`http://localhost:4000/api/host/events/${id}/memories`, {
+        const memoriesRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events/${id}/memories`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
@@ -249,7 +249,7 @@ const EventDetailsPage = () => {
         });
 
         // Fetch Event Details
-        const eventsRes = await fetch(`http://localhost:4000/api/host/events`, {
+        const eventsRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events`, {
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json'

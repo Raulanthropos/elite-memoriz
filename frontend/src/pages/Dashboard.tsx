@@ -31,7 +31,7 @@ const Dashboard = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch('http://localhost:4000/api/host/events', {
+        const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/events', {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
