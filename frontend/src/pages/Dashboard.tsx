@@ -16,6 +16,15 @@ const Dashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'wedding': return '💍';
+      case 'baptism': return '👶';
+      case 'party': return '🎈';
+      default: return '✨';
+    }
+  };
+
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -51,12 +60,20 @@ const Dashboard = () => {
             <h1 className="text-3xl font-bold text-white">Guest Reflections</h1>
             <p className="mt-2 text-gray-400">View and manage your event albums</p>
           </div>
-          <button 
-            onClick={() => supabase.auth.signOut().then(() => window.location.href = '/login')}
-            className="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors"
-          >
-            Sign Out
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => navigate('/create-event')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-bold text-white transition-colors shadow-lg shadow-indigo-500/20"
+            >
+              + Create New Event
+            </button>
+            <button 
+              onClick={() => supabase.auth.signOut().then(() => window.location.href = '/login')}
+              className="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -66,7 +83,13 @@ const Dashboard = () => {
         ) : events.length === 0 ? (
           <div className="text-center py-20 bg-gray-900 rounded-2xl border border-gray-800 border-dashed">
             <h3 className="text-xl font-medium text-white">No events yet</h3>
-            <p className="mt-2 text-gray-400">Create your first event to start collecting memories.</p>
+            <p className="mt-2 text-gray-400 mb-6">Create your first event to start collecting memories.</p>
+            <button 
+              onClick={() => navigate('/create-event')}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold transition-colors"
+            >
+              Create Event
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -81,6 +104,10 @@ const Dashboard = () => {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
+                  
+                  <div className="absolute top-4 right-4 bg-gray-900/80 backdrop-blur-sm border border-gray-700 px-3 py-1 rounded-full text-xl shadow-lg">
+                    {getCategoryIcon((event as any).category)}
+                  </div>
                 </div>
                 
                 <div className="p-6">

@@ -61,6 +61,42 @@ router.get('/events/:id/memories', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /events - Create a new event
+router.post('/events', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { title, date, category } = req.body;
+
+    if (!title || !date || !category) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Generate Slug
+    // Simple approach: title-lower-random4chars
+    const slugBase = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    const slug = `${slugBase}-${randomSuffix}`;
+
+    // Verify uniqueness (though random suffix makes collision rare for MVP)
+    // For production, a while loop check is better, but this suffices for now.
+
+    const [newEvent] = await db.insert(schema.events).values({
+      userId,
+      title,
+      slug,
+      date: new Date(date),
+      category: category as 'wedding' | 'baptism' | 'party' | 'other',
+      expiresAt: new Date(new Date(date).getTime() + 30 * 24 * 60 * 60 * 1000), // Expire in 30 days
+      package: 'BASIC', // Default for now
+    }).returning();
+
+    res.status(201).json(newEvent);
+  } catch (error) {
+    console.error('Error creating event:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // PATCH /memories/:id - Update memory approval status
 router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
   try {

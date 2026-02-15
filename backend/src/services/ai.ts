@@ -32,7 +32,7 @@ export const AIService = {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: messages,
-        temperature: 0.7,
+        temperature: 0.3,
         max_tokens: 300,
       });
 

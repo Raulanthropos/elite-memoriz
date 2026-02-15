@@ -24,6 +24,7 @@ export const events = pgTable('events', {
   spotifyUrl: text('spotify_url'),
   slug: varchar('slug', { length: 255 }).notNull().unique(), // The "unguessable" URL
   password: text('password'), // Optional event protection
+  category: text('category', { enum: ['wedding', 'baptism', 'party', 'other'] }).default('other').notNull(),
   package: text('package', { enum: packageTiers }).default('BASIC').notNull(),
   storageUsed: integer('storage_used').default(0), // Tracked in bytes or KB
   isExpired: boolean('is_expired').default(false),

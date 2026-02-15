@@ -1,7 +1,8 @@
-/// <reference types="vite/client" />
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { QRCodeSVG } from 'qrcode.react';
+import { X, QrCode } from 'lucide-react';
 
 // Memory Interface
 interface Memory {
@@ -105,12 +106,14 @@ const MemoryCard = ({ memory, onUpdateStatus }: { memory: Memory; onUpdateStatus
   );
 };
 
-const EventDetails = () => {
+const EventDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [eventSlug, setEventSlug] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
 
   const updateStatus = async (memoryId: number, isApproved: boolean) => {
     try {
@@ -137,25 +140,42 @@ const EventDetails = () => {
   };
 
   useEffect(() => {
-    const fetchMemories = async () => {
+    const fetchData = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch(`http://localhost:4000/api/host/events/${id}/memories`, {
+        // Fetch Memories
+        const memoriesRes = await fetch(`http://localhost:4000/api/host/events/${id}/memories`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
           }
         });
 
-        if (!res.ok) {
-            if (res.status === 404) throw new Error('Event not found');
-            throw new Error('Failed to fetch memories');
-        }
+        // Fetch Event Details (to get slug for QR)
+        // Note: Currently we don't have a direct "get single event for host" endpoint documented in previous context,
+        // but we can assume /api/host/events returns list, or we need to add one.
+        // Optimization: Let's fetch the list and find this event, OR add a GET /api/host/events/:id endpoint.
+        // For MVP speed, let's just fetch all host events and find this one to get the slug.
+        // Ideally we should have Get Event Details endpoint.
+        const eventsRes = await fetch(`http://localhost:4000/api/host/events`, {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!memoriesRes.ok || !eventsRes.ok) throw new Error('Failed to fetch data');
 
-        const data = await res.json();
-        setMemories(data);
+        const memoriesData = await memoriesRes.json();
+        const eventsData = await eventsRes.json();
+        
+        setMemories(memoriesData);
+        
+        const currentEvent = eventsData.find((e: any) => e.id === Number(id));
+        if (currentEvent) setEventSlug(currentEvent.slug);
+
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -163,18 +183,32 @@ const EventDetails = () => {
       }
     };
 
-    if (id) fetchMemories();
+    if (id) fetchData();
   }, [id]);
 
+  const guestUrl = eventSlug ? `${window.location.origin}/e/${eventSlug}` : '';
+
   return (
-    <div className="min-h-screen bg-gray-950 p-8 text-white">
+    <div className="min-h-screen bg-gray-950 p-8 text-white relative">
       <div className="max-w-7xl mx-auto">
-        <button 
-          onClick={() => navigate('/dashboard')}
-          className="mb-6 flex items-center text-gray-400 hover:text-white transition-colors"
-        >
-          ← Back to Dashboard
-        </button>
+        <div className="flex justify-between items-center mb-6">
+            <button 
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center text-gray-400 hover:text-white transition-colors"
+            >
+            ← Back to Dashboard
+            </button>
+            
+            {eventSlug && (
+                <button 
+                  onClick={() => setShowQR(true)}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                    <QrCode size={20} />
+                    Show QR Code
+                </button>
+            )}
+        </div>
 
         <h1 className="text-3xl font-bold mb-2">Approval Queue</h1>
         <p className="text-gray-400 mb-8">Review and approve guest memories for Event #{id}</p>
@@ -187,6 +221,14 @@ const EventDetails = () => {
            <div className="text-center py-20 bg-gray-900 rounded-2xl border border-gray-800 border-dashed">
             <h3 className="text-xl font-medium text-white">No memories yet</h3>
             <p className="mt-2 text-gray-400">Guests haven't uploaded anything for this event.</p>
+            {eventSlug && (
+                <button 
+                  onClick={() => setShowQR(true)}
+                  className="mt-4 px-4 py-2 bg-gray-800 rounded-lg text-sm text-purple-400 hover:text-purple-300"
+                >
+                    Show Guest QR Code
+                </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -200,8 +242,37 @@ const EventDetails = () => {
           </div>
         )}
       </div>
+
+      {/* QR Code Modal */}
+      {showQR && guestUrl && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+            <div className="bg-white text-gray-900 p-8 rounded-2xl shadow-2xl max-w-sm w-full relative">
+                <button 
+                    onClick={() => setShowQR(false)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                >
+                    <X size={24} />
+                </button>
+                
+                <div className="text-center">
+                    <h3 className="text-2xl font-bold mb-2">Scan to Join</h3>
+                    <p className="text-gray-500 mb-6 text-sm">Guests can scan this to upload photos directly to this event.</p>
+                    
+                    <div className="bg-white p-4 rounded-xl shadow-inner border border-gray-100 inline-block">
+                        <QRCodeSVG value={guestUrl} size={200} level="H" />
+                    </div>
+                    
+                    <div className="mt-6 pt-4 border-t border-gray-100">
+                        <p className="text-xs text-gray-400 truncate font-mono bg-gray-50 p-2 rounded selectable">
+                            {guestUrl}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default EventDetails;
+export default EventDetailsPage;
