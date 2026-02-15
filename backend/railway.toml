@@ -4,5 +4,5 @@ builder = "NIXPACKS"
 [deploy]
 startCommand = "npm run build && npm start"
 restartPolicyType = "ON_FAILURE"
-healthcheckPath = "/api/health" # Or just "/" if you don't have a health route
+healthcheckPath = "/"
 healthcheckTimeout = 100
