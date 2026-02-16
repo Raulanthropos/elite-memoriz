@@ -246,16 +246,28 @@ export const GuestEventPage: React.FC = () => {
         )}
 
         {/* --- SUCCESS STATE --- */}
-        {success && (
-          <div className="flex flex-col items-center py-6 animate-in zoom-in duration-300">
-            <div className="w-24 h-24 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
-                <CheckCircle2 className="w-10 h-10" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
-            <p className="text-gray-500 text-sm">The host will approve it shortly.</p>
-          </div>
-        )}
-
+{success && (
+  <div className="flex flex-col items-center py-6 animate-in zoom-in duration-300">
+    <div className="w-24 h-24 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
+        <CheckCircle2 className="w-10 h-10" />
+    </div>
+    <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
+    <p className="text-gray-500 text-sm mb-6">The host will approve it shortly.</p>
+  </div>
+)}
+{/* NEW: Button to reset state and allow another upload */}
+<button 
+    onClick={() => {
+        setSuccess(false);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setCaption('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }}
+    className="px-6 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors"
+>
+    Upload Another Memory
+</button>
       </div>
 
       {/* 3. Live Gallery */}
