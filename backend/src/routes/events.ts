@@ -124,7 +124,16 @@ router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: R
     const currentUploadCount = Number(uploadCountResult[0].count);
     const currentStorageUsed = event.storageUsed || 0;
 
-    const limits = TIER_LIMITS[event.package as keyof typeof TIER_LIMITS];
+    // NEW (Fix)
+    // 1. Force uppercase to handle "basic" vs "BASIC"
+    // 2. Default to 'BASIC' if the value is missing or weird
+    const tierKey = (event.package || 'BASIC').toUpperCase();
+
+    // 3. Lookup the tier, but if it fails, FALLBACK to BASIC limits.
+    // This guarantees 'limits' is never undefined.
+    const limits = (TIER_LIMITS as any)[tierKey] || TIER_LIMITS.BASIC;
+
+    console.log(`Uploading to Tier: ${tierKey}, Limits found:`, !!limits); // Debug log
 
     if (currentUploadCount >= limits.maxUploads) {
       fs.unlinkSync(file.path);
