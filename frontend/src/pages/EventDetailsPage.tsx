@@ -262,10 +262,15 @@ const EventDetailsPage = () => {
         const eventsData = await eventsRes.json();
         
         setMemories(memoriesData);
+
+        if (!Array.isArray(eventsData)) {
+            console.error("Expected array but got:", eventsData);
+            return;
+        }
         
-// ID is now a UUID string, so we compare directly
-const currentEvent = eventsData.find((e: any) => e.id === id);
-if (currentEvent) setEventSlug(currentEvent.slug);
+        // ID is now a UUID string, so we compare directly
+        const currentEvent = eventsData.find((e: any) => e.id === id);
+        if (currentEvent) setEventSlug(currentEvent.slug);
 
       } catch (err: any) {
         setError(err.message);

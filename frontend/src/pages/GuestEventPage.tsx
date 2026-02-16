@@ -12,11 +12,13 @@ interface EventDetails {
 }
 
 interface Memory {
-  id: number;
-  type: string;
-  storagePath: string;
-  aiStory: string | null;
-  isApproved: boolean;
+  id: string; // Changed to string for UUIDs
+  type: 'photo' | 'video' | 'story';
+  storage_path: string; // FIX: Match DB column name (snake_case)
+  original_text?: string; // FIX: Match DB
+  ai_story?: string; // FIX: Match DB
+  is_approved: boolean; // FIX: Match DB
+  created_at: string; // FIX: Match DB
 }
 
 // Helper to construct full image URL
@@ -272,7 +274,7 @@ export const GuestEventPage: React.FC = () => {
                 {memories.map(memory => (
                     <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
                         <img 
-                            src={getImageUrl(memory.storagePath)} 
+                            src={getImageUrl(memory.storage_path)} 
                             alt="Memory" 
                             className="w-full h-full object-cover"
                             loading="lazy"
