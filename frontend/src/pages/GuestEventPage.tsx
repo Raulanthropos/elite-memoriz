@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
 
 interface EventDetails {
-  id: number;
+  id: string;
   title: string;
   date: string;
   coverImage: string | null;
@@ -22,10 +22,14 @@ interface Memory {
 }
 
 // Helper to construct full image URL
-const getImageUrl = (path: string) => {
+// FIX: Add safety check for null/undefined path
+const getImageUrl = (path: string | null | undefined) => {
+  if (!path) return 'https://placehold.co/400x400?text=No+Image'; // Fallback
   if (path.startsWith('http')) return path;
+  
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/storage/v1/object/public/uploads/${path}`;
+  // Safety: Ensure supabaseUrl exists too
+  return `${supabaseUrl || ''}/storage/v1/object/public/uploads/${path}`;
 };
 
 export const GuestEventPage: React.FC = () => {
