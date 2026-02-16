@@ -12,9 +12,9 @@ const upload = multer({ dest: 'uploads/' }); // Clean, simple temp storage
 
 // Tier Limits
 const TIER_LIMITS = {
-  BASIC: { maxUploads: 20, maxStorage: 100 * 1024 * 1024 }, // 100MB
-  PREMIUM: { maxUploads: 100, maxStorage: 500 * 1024 * 1024 }, // 500MB
-  VIP: { maxUploads: Infinity, maxStorage: 2 * 1024 * 1024 * 1024 }, // 2GB
+  BASIC: { maxUploads: 20, maxStorage: 100 * 1024 * 1024 }, 
+  PRO: { maxUploads: 100, maxStorage: 500 * 1024 * 1024 }, 
+  VIP: { maxUploads: Infinity, maxStorage: 2 * 1024 * 1024 * 1024 }, 
 };
 
 // GET /:slug - Retrieve event details
