@@ -11,14 +11,27 @@ interface EventDetails {
   welcomeMessage: string | null;
 }
 
+// interface Memory {
+//   id: string; // Changed to string for UUIDs
+//   type: 'photo' | 'video' | 'story';
+//   storage_path: string; // FIX: Match DB column name (snake_case)
+//   original_text?: string; // FIX: Match DB
+//   ai_story?: string; // FIX: Match DB
+//   is_approved: boolean; // FIX: Match DB
+//   created_at: string; // FIX: Match DB
+// }
+
 interface Memory {
-  id: string; // Changed to string for UUIDs
+  id: string; 
   type: 'photo' | 'video' | 'story';
-  storage_path: string; // FIX: Match DB column name (snake_case)
-  original_text?: string; // FIX: Match DB
-  ai_story?: string; // FIX: Match DB
-  is_approved: boolean; // FIX: Match DB
-  created_at: string; // FIX: Match DB
+  
+  // FIX: Drizzle sends this as camelCase, not snake_case
+  storagePath: string; 
+  
+  originalText?: string; // Change original_text to originalText
+  aiStory?: string;      // Change ai_story to aiStory
+  isApproved: boolean;   // Change is_approved to isApproved
+  createdAt: string;     // Change created_at to createdAt
 }
 
 // Helper to construct full image URL
@@ -287,17 +300,18 @@ export const GuestEventPage: React.FC = () => {
             </div>
         ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {memories.map(memory => (
-                    <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
-                        <img 
-                            src={getImageUrl(memory.storage_path)} 
-                            alt="Memory" 
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                        {/* Gradient Overlay for Caption visibility if needed, or simple footer */}
-                    </div>
-                ))}
+{/* Gallery Loop */}
+{memories.map(memory => (
+    <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
+        {/* FIX: Use .storagePath instead of .storage_path */}
+        <img 
+            src={getImageUrl(memory.storagePath)} 
+            alt="Memory" 
+            className="w-full h-full object-cover"
+            loading="lazy"
+        />
+    </div>
+))}
             </div>
         )}
       </div>
