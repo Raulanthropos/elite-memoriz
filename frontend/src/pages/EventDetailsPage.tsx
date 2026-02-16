@@ -263,8 +263,9 @@ const EventDetailsPage = () => {
         
         setMemories(memoriesData);
         
-        const currentEvent = eventsData.find((e: any) => e.id === Number(id));
-        if (currentEvent) setEventSlug(currentEvent.slug);
+// ID is now a UUID string, so we compare directly
+const currentEvent = eventsData.find((e: any) => e.id === id);
+if (currentEvent) setEventSlug(currentEvent.slug);
 
       } catch (err: any) {
         setError(err.message);
