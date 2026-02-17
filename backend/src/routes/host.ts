@@ -133,7 +133,7 @@ router.get('/events/:id/memories', async (req: AuthRequest, res: Response) => {
 router.post('/events', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { title, date, category } = req.body;
+    const { title, date, category, coverImage } = req.body;
 
     if (!title || !date || !category) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -169,6 +169,7 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
       slug,
       date: new Date(date),
       category: category as 'wedding' | 'baptism' | 'party' | 'other',
+      coverImage, // Save the cover image (path or URL)
       expiresAt: new Date(new Date(date).getTime() + 30 * 24 * 60 * 60 * 1000), // Expire in 30 days
       package: profile.tier, // Inherit tier from profile
     }).returning();
@@ -178,6 +179,48 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
     console.error('Error creating event:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+});
+
+// DELETE /events/:id - Delete an event (Admin or Owner)
+router.delete('/events/:id', async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id; // Authenticated User
+        const eventId = req.params.id; // Event UUID
+
+        // 1. Fetch Requesting User Profile (to check for admin)
+        const profile = await db.query.profiles.findFirst({
+            where: eq(schema.profiles.id, userId)
+        });
+
+        // 2. Fetch Event
+        const event = await db.query.events.findFirst({
+            where: eq(schema.events.id, eventId)
+        });
+
+        if (!event) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        // 3. Permission Check: Must be Owner OR Admin
+        const isOwner = event.userId === userId;
+        const isAdmin = profile?.role === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ message: 'Unauthorized. Only the host or an admin can delete this event.' });
+        }
+
+        // 4. Delete associated memories first (Optional: Cascade usually handles this, but manual clean up of storage is good)
+        // For brevity, we assume Cascade Delete on DB or we just delete the event row.
+        // If we need to clean up storage, we'd query memories and delete files here.
+        
+        // Delete Event
+        await db.delete(schema.events).where(eq(schema.events.id, eventId));
+
+        res.json({ message: 'Event deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting event:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 // PATCH /memories/:id - Update memory approval status

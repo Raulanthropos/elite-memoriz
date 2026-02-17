@@ -182,6 +182,7 @@ const EventDetailsPage = () => {
   const [eventSlug, setEventSlug] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Approve Logic
   const updateStatus = async (memoryId: number, isApproved: boolean) => {
@@ -234,6 +235,30 @@ const EventDetailsPage = () => {
       }
   };
 
+  const handleAdminDelete = async () => {
+      if (!confirm('ADMIN: Are you sure you want to FORCE DELETE this event? This action is irreversible.')) return;
+
+      try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('No session');
+
+          const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events/${id}`, {
+              method: 'DELETE',
+              headers: {
+                  'Authorization': `Bearer ${session.access_token}`
+              }
+          });
+
+          if (!res.ok) throw new Error('Failed to delete event');
+          
+          alert('Event deleted successfully.');
+          navigate('/dashboard');
+      } catch (err) {
+          console.error('Admin delete failed:', err);
+          alert('Failed to delete event');
+      }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -257,6 +282,17 @@ const EventDetailsPage = () => {
         });
         
         if (!memoriesRes.ok || !eventsRes.ok) throw new Error('Failed to fetch data');
+
+        // Fetch User Profile to check for Admin
+        const profileRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/profile`, {
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`
+            }
+        });
+        if (profileRes.ok) {
+            const profile = await profileRes.json();
+            setIsAdmin(profile.role === 'admin');
+        }
 
         const memoriesData = await memoriesRes.json();
         const eventsData = await eventsRes.json();
@@ -339,6 +375,25 @@ const EventDetailsPage = () => {
               />
             ))}
           </div>
+        )}
+        
+        {/* Admin Force Delete Section */}
+        {isAdmin && (
+            <div className="mt-12 pt-8 border-t border-red-900/30">
+                <h3 className="text-xl font-bold text-red-500 mb-4">Admin Danger Zone</h3>
+                <div className="bg-red-900/10 border border-red-900/50 rounded-xl p-6 flex justify-between items-center">
+                    <div>
+                        <p className="text-white font-medium">Force Delete Event</p>
+                        <p className="text-sm text-gray-400">Permanently remove this event and all its memories. This cannot be undone.</p>
+                    </div>
+                    <button 
+                        onClick={handleAdminDelete}
+                        className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors shadow-lg shadow-red-900/20"
+                    >
+                        Force Delete
+                    </button>
+                </div>
+            </div>
         )}
       </div>
 

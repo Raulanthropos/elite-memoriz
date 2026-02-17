@@ -1,8 +1,15 @@
-
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Check, Star, Zap, Crown } from 'lucide-react';
+import { Check, Star, Zap, Crown, Upload, X } from 'lucide-react';
+import ImageCropper from '../components/ImageCropper';
+
+const DEFAULT_COVERS = {
+  wedding: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200',
+  baptism: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=1200',
+  party: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200',
+  other: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200'
+};
 
 const CreateEvent = () => {
   const navigate = useNavigate();
@@ -11,10 +18,17 @@ const CreateEvent = () => {
     title: '',
     date: '',
     category: 'wedding' as 'wedding' | 'baptism' | 'party' | 'other',
-    package: 'BASIC'
+    package: 'BASIC',
+    coverImage: '' 
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Image Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCropping, setIsCropping] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = [
     { id: 'wedding', label: 'Wedding', icon: '💍' },
@@ -38,6 +52,24 @@ const CreateEvent = () => {
       setStep(1);
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setIsCropping(true);
+    }
+  };
+
+  const onCropComplete = (croppedBlob: Blob) => {
+      const croppedUrl = URL.createObjectURL(croppedBlob);
+      setPreviewUrl(croppedUrl);
+      // Convert Blob to File for upload
+      const file = new File([croppedBlob], "cover.jpg", { type: "image/jpeg" });
+      setSelectedFile(file);
+      setIsCropping(false);
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
@@ -46,13 +78,34 @@ const CreateEvent = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
+      let finalCoverImage = formData.coverImage;
+
+      // 1. Upload Custom Image if selected
+      if (selectedFile) {
+          const fileName = `${Date.now()}-cover.jpg`;
+          const { error: uploadError } = await supabase.storage
+              .from('uploads')
+              .upload(fileName, selectedFile);
+          
+          if (uploadError) throw uploadError;
+          finalCoverImage = fileName; // Store path
+      } else {
+          // 2. Use Default URL if no specific file
+           finalCoverImage = DEFAULT_COVERS[formData.category];
+      }
+
+      const payload = {
+          ...formData,
+          coverImage: finalCoverImage
+      };
+
       const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/events', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
@@ -68,6 +121,8 @@ const CreateEvent = () => {
       // Stay on step 2 if error
     }
   };
+
+  const currentCoverPreview = previewUrl || DEFAULT_COVERS[formData.category];
 
   return (
     <div className="min-h-screen bg-gray-950 p-8 text-white flex items-center justify-center">
@@ -141,6 +196,53 @@ const CreateEvent = () => {
                     </div>
                 </div>
 
+                {/* Cover Image Selection */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-400 mb-2">Cover Image</label>
+                   <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-gray-700 group">
+                      <img 
+                        src={currentCoverPreview} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                          <button 
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="bg-black/50 hover:bg-black/70 text-white px-4 py-2 rounded-lg flex items-center gap-2 backdrop-blur-sm transition-all shadow-lg border border-white/10"
+                          >
+                             <Upload size={18} />
+                             {previewUrl ? 'Change Image' : 'Upload Custom Cover'}
+                          </button>
+                          {previewUrl && (
+                             <button
+                                type="button" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewUrl(null);
+                                    setSelectedFile(null);
+                                    if(fileInputRef.current) fileInputRef.current.value = '';
+                                }}
+                                className="absolute top-2 right-2 p-1 bg-red-600/80 rounded-full hover:bg-red-500 text-white"
+                             >
+                                 <X size={14} />
+                             </button>
+                          )}
+                      </div>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                   </div>
+                   <p className="text-xs text-gray-500 mt-2">
+                       We've selected a default for {categories.find(c => c.id === formData.category)?.label}. Upload your own to customize.
+                   </p>
+                </div>
+
+
                 <div className="flex gap-4 pt-4">
                     <button 
                         type="button"
@@ -212,6 +314,21 @@ const CreateEvent = () => {
             )}
         </div>
       </div>
+
+      {/* Cropper Modal */}
+      {isCropping && previewUrl && (
+          <ImageCropper 
+            imageSrc={previewUrl}
+            aspectRatio={16/9}
+            onCropComplete={onCropComplete}
+            onCancel={() => {
+                setIsCropping(false);
+                setPreviewUrl(null);
+                setSelectedFile(null);
+                if(fileInputRef.current) fileInputRef.current.value = '';
+            }}
+          />
+      )}
     </div>
   );
 };
