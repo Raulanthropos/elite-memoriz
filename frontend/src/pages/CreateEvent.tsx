@@ -3,13 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Check, Star, Zap, Crown, Upload, X } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
-
-const DEFAULT_COVERS = {
-  wedding: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200',
-  baptism: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=1200',
-  party: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200',
-  other: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200'
-};
+import { DEFAULT_COVERS, getEventCoverUrl } from '../utils/image'; // IMPORTED
 
 const CreateEvent = () => {
   const navigate = useNavigate();
@@ -31,10 +25,10 @@ const CreateEvent = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = [
-    { id: 'wedding', label: 'Wedding', icon: '💍' },
+    { id: 'wedding', label: 'Wedding', icon: '💒' },
     { id: 'baptism', label: 'Baptism', icon: '👶' },
-    { id: 'party', label: 'Party', icon: '🎈' },
-    { id: 'other', label: 'Other', icon: '✨' }
+    { id: 'party', label: 'Party', icon: '🎉' },
+    { id: 'other', label: 'Other', icon: '🎈' }
   ];
 
   const tiers = [
@@ -55,18 +49,23 @@ const CreateEvent = () => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setIsCropping(true);
+      setPreviewUrl(URL.createObjectURL(file)); // Show raw preview
+      setIsCropping(true); // Trigger Cropper immediately
+      // Reset input so same file can be selected again if needed
+      e.target.value = ''; 
     }
   };
 
   const onCropComplete = (croppedBlob: Blob) => {
-      const croppedUrl = URL.createObjectURL(croppedBlob);
-      setPreviewUrl(croppedUrl);
-      // Convert Blob to File for upload
+      // 1. Convert Blob to File
       const file = new File([croppedBlob], "cover.jpg", { type: "image/jpeg" });
       setSelectedFile(file);
+      
+      // 2. Update Preview
+      const croppedUrl = URL.createObjectURL(croppedBlob);
+      setPreviewUrl(croppedUrl);
+      
+      // 3. Close Modal
       setIsCropping(false);
   };
 
@@ -80,7 +79,7 @@ const CreateEvent = () => {
 
       let finalCoverImage = formData.coverImage;
 
-      // 1. Upload Custom Image if selected
+      // Logic: If user picked a file, upload it. If not, send the Default URL.
       if (selectedFile) {
           const fileName = `${Date.now()}-cover.jpg`;
           const { error: uploadError } = await supabase.storage
@@ -88,10 +87,10 @@ const CreateEvent = () => {
               .upload(fileName, selectedFile);
           
           if (uploadError) throw uploadError;
-          finalCoverImage = fileName; // Store path
+          finalCoverImage = fileName; // Save just the filename
       } else {
-          // 2. Use Default URL if no specific file
-           finalCoverImage = DEFAULT_COVERS[formData.category];
+          // If no custom file, use the default URL for the category
+          finalCoverImage = DEFAULT_COVERS[formData.category];
       }
 
       const payload = {
@@ -118,11 +117,11 @@ const CreateEvent = () => {
       console.error('Error creating event:', err);
       setError(err.message);
       setLoading(false);
-      // Stay on step 2 if error
     }
   };
 
-  const currentCoverPreview = previewUrl || DEFAULT_COVERS[formData.category];
+  // Use the new helper to show current selection or default
+  const displayPreview = previewUrl || DEFAULT_COVERS[formData.category];
 
   return (
     <div className="min-h-screen bg-gray-950 p-8 text-white flex items-center justify-center">
@@ -201,33 +200,19 @@ const CreateEvent = () => {
                    <label className="block text-sm font-medium text-gray-400 mb-2">Cover Image</label>
                    <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-gray-700 group">
                       <img 
-                        src={currentCoverPreview} 
+                        src={displayPreview} 
                         alt="Preview" 
-                        className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity"
+                        className="w-full h-full object-cover transition-opacity duration-300"
                       />
-                      <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="bg-black/50 hover:bg-black/70 text-white px-4 py-2 rounded-lg flex items-center gap-2 backdrop-blur-sm transition-all shadow-lg border border-white/10"
+                            className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 backdrop-blur-md border border-white/20 shadow-xl"
                           >
                              <Upload size={18} />
-                             {previewUrl ? 'Change Image' : 'Upload Custom Cover'}
+                             {selectedFile ? 'Change Image' : 'Upload Custom Cover'}
                           </button>
-                          {previewUrl && (
-                             <button
-                                type="button" 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPreviewUrl(null);
-                                    setSelectedFile(null);
-                                    if(fileInputRef.current) fileInputRef.current.value = '';
-                                }}
-                                className="absolute top-2 right-2 p-1 bg-red-600/80 rounded-full hover:bg-red-500 text-white"
-                             >
-                                 <X size={14} />
-                             </button>
-                          )}
                       </div>
                       <input 
                         type="file" 
@@ -237,9 +222,19 @@ const CreateEvent = () => {
                         className="hidden"
                       />
                    </div>
-                   <p className="text-xs text-gray-500 mt-2">
-                       We've selected a default for {categories.find(c => c.id === formData.category)?.label}. Upload your own to customize.
-                   </p>
+                   {selectedFile && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedFile(null);
+                                setPreviewUrl(null);
+                                if(fileInputRef.current) fileInputRef.current.value = '';
+                            }}
+                            className="text-xs text-red-400 hover:text-red-300 mt-2 flex items-center gap-1"
+                        >
+                            <X size={12} /> Remove custom image (Revert to default)
+                        </button>
+                   )}
                 </div>
 
 

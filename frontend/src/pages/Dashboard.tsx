@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { getEventCoverUrl } from '../utils/imageUrl';
+import { getEventCoverUrl } from '../utils/image';
 
+// FIX: Update interface to match DB (UUIDs and Category)
 interface Event {
-  id: number;
+  id: string; // Changed from number to string for UUIDs
   title: string;
   slug: string;
   date: string;
   coverImage?: string;
+  category: string; // Added category so we can pick the right default cover
 }
 
 const Dashboard = () => {
@@ -32,6 +34,7 @@ const Dashboard = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
+        // Note: Ensure this URL matches your actual backend environment
         const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/events', {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -97,15 +100,16 @@ const Dashboard = () => {
             {events.map((event) => (
               <div key={event.id} className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1">
                 <div className="aspect-video w-full bg-gray-800 overflow-hidden relative">
+                  {/* FIX: Pass event.category so the correct default image is chosen */}
                   <img 
-                    src={getEventCoverUrl(event.coverImage)} 
+                    src={getEventCoverUrl(event.coverImage, event.category)} 
                     alt={event.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                   
                   <div className="absolute top-4 right-4 bg-gray-900/80 backdrop-blur-sm border border-gray-700 px-3 py-1 rounded-full text-xl shadow-lg">
-                    {getCategoryIcon((event as any).category)}
+                    {getCategoryIcon(event.category)}
                   </div>
                 </div>
                 

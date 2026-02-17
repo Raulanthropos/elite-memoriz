@@ -1,24 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
-import { getEventCoverUrl } from '../utils/imageUrl';
+import { getEventCoverUrl, getImageUrl } from '../utils/image';
 
+// FIX: Interface matches Drizzle schema (CamelCase) & includes category for the cover logic
 interface EventDetails {
-  id: string;
+  id: number;
   title: string;
   date: string;
   coverImage: string | null;
+  category: string; 
   welcomeMessage: string | null;
 }
 
 interface Memory {
   id: string; 
   type: 'photo' | 'video' | 'story';
-  storagePath: string; 
+  storagePath: string; // FIX: Ensure this matches your API response (camelCase)
   originalText?: string;
-  aiStory?: string;
-  isApproved: boolean;
-  createdAt: string;
+  aiStory?: string; 
+  isApproved: boolean; 
+  createdAt: string; 
 }
 
 export const GuestEventPage: React.FC = () => {
@@ -42,6 +44,8 @@ export const GuestEventPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch Event & Memories in parallel
+        // NOTE: Ensure these URLs match your actual backend (localhost vs railway)
         const [eventRes, memoriesRes] = await Promise.all([
             fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}`),
             fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/memories`)
@@ -100,14 +104,6 @@ export const GuestEventPage: React.FC = () => {
 
       setSuccess(true);
       
-      // Cleanup Preview after success
-      setTimeout(() => {
-          setSuccess(false);
-          setCaption('');
-          setSelectedFile(null);
-          setPreviewUrl(null);
-      }, 3000);
-
     } catch (err) {
       alert(`Upload failed: ${(err as Error).message}`);
     } finally {
@@ -136,39 +132,29 @@ export const GuestEventPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
-      {/* 1. Header */}
-      <div className="bg-white shadow-sm pb-6 text-center sticky top-0 z-20 overflow-hidden">
-        {/* Event Cover Background */}
-        <div className="h-48 w-full relative mb-12">
-            <img 
-                src={getEventCoverUrl(event.coverImage)} 
-                alt="Cover" 
-                className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/20 to-transparent"></div>
+      {/* 1. Header with Intelligent Cover */}
+      <div className="relative h-64 bg-gray-200">
+          <img 
+            src={getEventCoverUrl(event.coverImage, event.category)} 
+            alt={event.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-4 text-center backdrop-blur-[2px]">
+            <h1 className="text-3xl font-serif font-bold mb-2 shadow-sm">{event.title}</h1>
+            <p className="text-sm opacity-90 uppercase tracking-widest">{new Date(event.date).toLocaleDateString()}</p>
             
-            {/* Title Overlay */}
-            <div className="absolute -bottom-8 left-0 right-0 px-6">
-                <h1 className="text-3xl font-serif text-gray-900 mb-1 drop-shadow-sm">{event.title}</h1>
-                <p className="text-sm text-gray-600 bg-white/80 inline-block px-3 py-1 rounded-full backdrop-blur-sm shadow-sm">
-                    {new Date(event.date).toLocaleDateString(undefined, { dateStyle: 'long' })}
-                </p>
-            </div>
-        </div>
-
-        {event.welcomeMessage && (
-            <div className="mt-4 px-6">
-                <div className="p-4 bg-purple-50 rounded-xl text-purple-800 text-sm italic border border-purple-100">
+            {event.welcomeMessage && (
+                <div className="mt-3 px-4 py-2 bg-white/20 rounded-full text-xs backdrop-blur-md">
                     "{event.welcomeMessage}"
                 </div>
-            </div>
-        )}
+            )}
+          </div>
       </div>
 
       {/* 2. Main Action Area */}
-      <div className="p-6 flex flex-col items-center gap-4 bg-white border-b border-gray-100 shadow-sm mb-6 transition-all duration-300">
+      <div className="p-6 flex flex-col items-center gap-4 bg-white border-b border-gray-100 shadow-xl mb-8 -mt-8 rounded-t-3xl relative z-10 mx-4">
         
-        {/* Hidden Input (Note: removed 'capture' attribute) */}
+        {/* Hidden Input */}
         <input 
           type="file" 
           accept="image/*" 
@@ -179,16 +165,16 @@ export const GuestEventPage: React.FC = () => {
 
         {/* --- DEFAULT STATE: No File Selected --- */}
         {!selectedFile && !success && (
-            <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
+            <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-300 py-4">
                 <button 
                     onClick={triggerPicker}
-                    className="w-40 h-40 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 shadow-xl shadow-purple-200 flex flex-col items-center justify-center text-white active:scale-95 transition-transform"
+                    className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 shadow-lg shadow-indigo-200 flex flex-col items-center justify-center text-white active:scale-95 transition-transform hover:scale-105"
                 >
-                    <Camera className="w-10 h-10 mb-2" />
-                    <span className="font-bold text-lg">Share Memory</span>
+                    <Camera className="w-8 h-8 mb-1" />
                 </button>
-                <p className="text-xs text-gray-400 mt-4 max-w-xs">
-                    Tap to take a photo or select from gallery
+                <h3 className="text-lg font-bold text-gray-800 mt-4">Share a Memory</h3>
+                <p className="text-xs text-gray-400 max-w-xs mt-1">
+                    Take a photo or upload from your gallery
                 </p>
             </div>
         )}
@@ -202,7 +188,7 @@ export const GuestEventPage: React.FC = () => {
                     <img 
                         src={previewUrl!} 
                         alt="Preview" 
-                        className="w-full h-auto max-h-[300px] object-contain mx-auto"
+                        className="w-full h-auto max-h-[400px] object-contain mx-auto"
                     />
                     <button 
                         onClick={cancelPreview}
@@ -237,7 +223,7 @@ export const GuestEventPage: React.FC = () => {
                 {/* Send Button */}
                 <button 
                     onClick={handleUpload}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
                 >
                     <Send size={18} />
                     Send Memory
@@ -247,51 +233,63 @@ export const GuestEventPage: React.FC = () => {
 
         {/* --- UPLOADING STATE --- */}
         {uploading && (
-          <div className="flex flex-col items-center py-6">
-            <div className="w-20 h-20 rounded-full bg-white border-4 border-purple-100 flex items-center justify-center text-purple-600 mb-4">
+          <div className="flex flex-col items-center py-8">
+            <div className="w-16 h-16 rounded-full bg-white border-4 border-purple-100 flex items-center justify-center text-purple-600 mb-4">
                 <Loader2 className="w-8 h-8 animate-spin" />
             </div>
-            <span className="font-bold text-gray-600">Sending...</span>
+            <span className="font-bold text-gray-600">Uploading...</span>
           </div>
         )}
 
-        {/* --- SUCCESS STATE --- */}
-{success && (
-  <div className="flex flex-col items-center py-6 animate-in zoom-in duration-300">
-    <div className="w-24 h-24 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
-        <CheckCircle2 className="w-10 h-10" />
-    </div>
-    <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
-    <p className="text-gray-500 text-sm mb-6">The host will approve it shortly.</p>
-  </div>
-)}
+        {/* --- SUCCESS STATE (With Reset Button) --- */}
+        {success && (
+          <div className="flex flex-col items-center py-6 animate-in zoom-in duration-300 w-full">
+            <div className="w-20 h-20 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
+                <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
+            <p className="text-gray-500 text-sm mb-6 text-center">It will appear in the gallery once approved.</p>
+            
+            <button 
+                onClick={() => {
+                    setSuccess(false);
+                    setSelectedFile(null);
+                    setPreviewUrl(null);
+                    setCaption('');
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl shadow-md transition-colors"
+            >
+                Upload Another Memory
+            </button>
+          </div>
+        )}
+
       </div>
 
       {/* 3. Live Gallery */}
       <div className="px-4 max-w-4xl mx-auto">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-800 uppercase tracking-wider mb-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 px-2">
             <ImageIcon size={16} className="text-purple-600"/>
             Live Gallery
         </h3>
         
-        {memories.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200">
-                <p className="text-gray-400">No approved photos yet. Be the first!</p>
+        {(!memories || memories.length === 0) ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-200">
+                <p className="text-gray-400 text-sm">No approved photos yet.<br/>Be the first to share!</p>
             </div>
         ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-{/* Gallery Loop */}
-{memories.map(memory => (
-    <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
-        {/* FIX: Use .storagePath instead of .storage_path */}
-        <img 
-            src={getEventCoverUrl(memory.storagePath)} 
-            alt="Memory" 
-            className="w-full h-full object-cover"
-            loading="lazy"
-        />
-    </div>
-))}
+                {memories.map(memory => (
+                    <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
+                        <img 
+                            src={getImageUrl(memory.storagePath)} 
+                            alt="Memory" 
+                            className="w-full h-full object-cover transition-transform hover:scale-105 duration-500"
+                            loading="lazy"
+                        />
+                    </div>
+                ))}
             </div>
         )}
       </div>
