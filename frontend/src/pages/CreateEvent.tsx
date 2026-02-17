@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Check, Star, Zap, Crown, Upload, X } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
-import { DEFAULT_COVERS, getEventCoverUrl } from '../utils/image'; // IMPORTED
+import { DEFAULT_COVERS } from '../utils/image'; // FIX: Removed unused 'getEventCoverUrl'
 
 const CreateEvent = () => {
   const navigate = useNavigate();
@@ -310,7 +310,7 @@ const CreateEvent = () => {
         </div>
       </div>
 
-      {/* Cropper Modal */}
+      {/* Cropper Modal - This uses your fixed Z-Index component */}
       {isCropping && previewUrl && (
           <ImageCropper 
             imageSrc={previewUrl}
