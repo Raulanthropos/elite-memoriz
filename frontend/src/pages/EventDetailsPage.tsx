@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, QrCode, Trash2, AlertTriangle, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs

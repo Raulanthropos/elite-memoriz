@@ -83,11 +83,8 @@ router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: R
     const { slug } = req.params;
     let { memory } = req.body; // Multer parses this
 
-    // Fix: Multer often reads non-ASCII form-data as latin1. Force conversion to UTF-8.
-    let cleanOriginal = memory || '';
-    if (memory) {
-        cleanOriginal = Buffer.from(memory, 'latin1').toString('utf8');
-    }
+// FIX: Trust the raw input. Do not convert manually.
+const cleanOriginal = memory || '';
     
     console.log('Saving to DB - Original:', cleanOriginal);
 
