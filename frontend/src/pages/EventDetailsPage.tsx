@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, QrCode } from 'lucide-react';
+import { getEventCoverUrl } from '../utils/imageUrl';
 
 // Memory Interface
 interface Memory {
@@ -14,15 +15,6 @@ interface Memory {
   isApproved: boolean;
   createdAt: string;
 }
-
-// Helper to construct full image URL
-const getImageUrl = (path: string) => {
-  if (path.startsWith('http')) return path;
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/storage/v1/object/public/uploads/${path}`;
-};
-
-
 
 // Sub-component for individual memory cards
 const MemoryCard = ({ 
@@ -45,7 +37,7 @@ const MemoryCard = ({
       <div className="aspect-[4/3] w-full relative bg-gray-800 overflow-hidden cursor-pointer" onClick={() => onViewStory(memory)}>
           {memory.type === 'photo' ? (
               <img 
-                src={getImageUrl(memory.storagePath)} 
+                src={getEventCoverUrl(memory.storagePath)} 
                 alt="Memory" 
                 className="w-full h-full object-cover block transition-transform duration-500 hover:scale-105"
                 onError={(e) => {
@@ -142,7 +134,7 @@ const StoryModal = ({ memory, onClose }: { memory: Memory; onClose: () => void }
         <div className="md:w-1/2 bg-gray-800">
            {memory.type === 'photo' ? (
               <img 
-                src={getImageUrl(memory.storagePath)} 
+                src={getEventCoverUrl(memory.storagePath)} 
                 alt="Memory" 
                 className="w-full h-full object-contain md:object-cover min-h-[300px]"
               />
@@ -172,6 +164,7 @@ const StoryModal = ({ memory, onClose }: { memory: Memory; onClose: () => void }
     </div>
   );
 };
+
 
 const EventDetailsPage = () => {
   const { id } = useParams<{ id: string }>();

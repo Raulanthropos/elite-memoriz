@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { getEventCoverUrl } from '../utils/imageUrl';
 
 interface Event {
   id: number;
@@ -96,13 +97,11 @@ const Dashboard = () => {
             {events.map((event) => (
               <div key={event.id} className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1">
                 <div className="aspect-video w-full bg-gray-800 overflow-hidden relative">
-                  {event.coverImage ? (
-                    <img src={event.coverImage} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-600 bg-gray-800">
-                      <span className="text-sm font-medium uppercase tracking-wider">No Cover</span>
-                    </div>
-                  )}
+                  <img 
+                    src={getEventCoverUrl(event.coverImage)} 
+                    alt={event.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                   
                   <div className="absolute top-4 right-4 bg-gray-900/80 backdrop-blur-sm border border-gray-700 px-3 py-1 rounded-full text-xl shadow-lg">

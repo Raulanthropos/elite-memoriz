@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
+import { getEventCoverUrl } from '../utils/imageUrl';
 
 interface EventDetails {
   id: string;
@@ -11,39 +11,15 @@ interface EventDetails {
   welcomeMessage: string | null;
 }
 
-// interface Memory {
-//   id: string; // Changed to string for UUIDs
-//   type: 'photo' | 'video' | 'story';
-//   storage_path: string; // FIX: Match DB column name (snake_case)
-//   original_text?: string; // FIX: Match DB
-//   ai_story?: string; // FIX: Match DB
-//   is_approved: boolean; // FIX: Match DB
-//   created_at: string; // FIX: Match DB
-// }
-
 interface Memory {
   id: string; 
   type: 'photo' | 'video' | 'story';
-  
-  // FIX: Drizzle sends this as camelCase, not snake_case
   storagePath: string; 
-  
-  originalText?: string; // Change original_text to originalText
-  aiStory?: string;      // Change ai_story to aiStory
-  isApproved: boolean;   // Change is_approved to isApproved
-  createdAt: string;     // Change created_at to createdAt
+  originalText?: string;
+  aiStory?: string;
+  isApproved: boolean;
+  createdAt: string;
 }
-
-// Helper to construct full image URL
-// FIX: Add safety check for null/undefined path
-const getImageUrl = (path: string | null | undefined) => {
-  if (!path) return 'https://placehold.co/400x400?text=No+Image'; // Fallback
-  if (path.startsWith('http')) return path;
-  
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  // Safety: Ensure supabaseUrl exists too
-  return `${supabaseUrl || ''}/storage/v1/object/public/uploads/${path}`;
-};
 
 export const GuestEventPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -161,13 +137,30 @@ export const GuestEventPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
       {/* 1. Header */}
-      <div className="bg-white shadow-sm p-6 text-center sticky top-0 z-20">
-        <h1 className="text-2xl font-serif text-gray-900 mb-1">{event.title}</h1>
-        <p className="text-sm text-gray-500">{new Date(event.date).toLocaleDateString()}</p>
-        
+      <div className="bg-white shadow-sm pb-6 text-center sticky top-0 z-20 overflow-hidden">
+        {/* Event Cover Background */}
+        <div className="h-48 w-full relative mb-12">
+            <img 
+                src={getEventCoverUrl(event.coverImage)} 
+                alt="Cover" 
+                className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/20 to-transparent"></div>
+            
+            {/* Title Overlay */}
+            <div className="absolute -bottom-8 left-0 right-0 px-6">
+                <h1 className="text-3xl font-serif text-gray-900 mb-1 drop-shadow-sm">{event.title}</h1>
+                <p className="text-sm text-gray-600 bg-white/80 inline-block px-3 py-1 rounded-full backdrop-blur-sm shadow-sm">
+                    {new Date(event.date).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                </p>
+            </div>
+        </div>
+
         {event.welcomeMessage && (
-            <div className="mt-3 p-3 bg-purple-50 rounded-lg text-purple-800 text-sm italic">
-                "{event.welcomeMessage}"
+            <div className="mt-4 px-6">
+                <div className="p-4 bg-purple-50 rounded-xl text-purple-800 text-sm italic border border-purple-100">
+                    "{event.welcomeMessage}"
+                </div>
             </div>
         )}
       </div>
@@ -292,7 +285,7 @@ export const GuestEventPage: React.FC = () => {
     <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
         {/* FIX: Use .storagePath instead of .storage_path */}
         <img 
-            src={getImageUrl(memory.storagePath)} 
+            src={getEventCoverUrl(memory.storagePath)} 
             alt="Memory" 
             className="w-full h-full object-cover"
             loading="lazy"
