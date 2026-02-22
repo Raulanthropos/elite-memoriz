@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
+import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, ArrowLeft } from 'lucide-react';
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
@@ -45,6 +45,7 @@ export const GuestEventPage: React.FC = () => {
   const [guestName, setGuestName] = useState('Guest');
   const [caption, setCaption] = useState('');
 
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -228,8 +229,17 @@ export const GuestEventPage: React.FC = () => {
             alt={event.title}
             className="w-full h-full object-cover"
           />
+          {/* Back Button */}
+          <button 
+             onClick={() => navigate('/')} 
+             className="absolute top-4 left-4 z-20 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all"
+             aria-label="Go Back"
+          >
+             <ArrowLeft size={24} />
+          </button>
+          
           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-4 text-center backdrop-blur-[2px]">
-            <h1 className="text-3xl font-serif font-bold mb-2 shadow-sm">{event.title}</h1>
+            <h1 className="text-3xl font-serif font-bold mb-2 shadow-sm">{event.title} <span className="text-xs text-red-400">v2</span></h1>
             <p className="text-sm opacity-90 uppercase tracking-widest">{new Date(event.date).toLocaleDateString()}</p>
             {event.welcomeMessage && (
                 <div className="mt-3 px-4 py-2 bg-white/20 rounded-full text-xs backdrop-blur-md">
