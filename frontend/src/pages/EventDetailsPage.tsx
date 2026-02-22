@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
+import { API_URL } from '../lib/config';
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {
@@ -174,7 +175,7 @@ const EventDetailsPage = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/memories/${memoryId}`, {
+        const res = await fetch(`${API_URL}/api/host/memories/${memoryId}`, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`,
@@ -205,7 +206,7 @@ const EventDetailsPage = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/memories/${memoryId}`, {
+        const res = await fetch(`${API_URL}/api/host/memories/${memoryId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`
@@ -230,7 +231,7 @@ const EventDetailsPage = () => {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) return;
 
-          const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events/${id}`, {
+          const res = await fetch(`${API_URL}/api/host/events/${id}`, {
               method: 'DELETE',
               headers: {
                   'Authorization': `Bearer ${session.access_token}`
@@ -254,17 +255,17 @@ const EventDetailsPage = () => {
         if (!session) throw new Error('No session');
 
         // 1. Fetch Memories
-        const memoriesRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events/${id}/memories`, {
+        const memoriesRes = await fetch(`${API_URL}/api/host/events/${id}/memories`, {
           headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
 
         // 2. Fetch All Events (to find current one)
-        const eventsRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/events`, {
+        const eventsRes = await fetch(`${API_URL}/api/host/events`, {
             headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
 
         // 3. Fetch Profile (To check Admin Status)
-        const profileRes = await fetch(`https://elite-memoriz-production.up.railway.app/api/host/profile`, {
+        const profileRes = await fetch(`${API_URL}/api/host/profile`, {
             headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
         
@@ -295,6 +296,60 @@ const EventDetailsPage = () => {
     };
 
     if (id) fetchData();
+
+    // Set up Realtime Subscription for Host
+    const channel = supabase
+      .channel('host_memories_dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'memories',
+        },
+        (payload) => {
+           console.log('Host Realtime Payload:', payload);
+           // Client-side filtering to bypass strict RLS replication missing grants
+           const incomingEventId = payload.eventType === 'DELETE' 
+             ? payload.old.event_id 
+             : payload.new.event_id;
+             
+           if (incomingEventId !== id) return;
+
+           if (payload.eventType === 'INSERT') {
+              setMemories(prev => [
+                {
+                   id: payload.new.id,
+                   type: payload.new.type,
+                   storagePath: payload.new.storage_path,
+                   originalText: payload.new.original_text,
+                   aiStory: payload.new.ai_story,
+                   isApproved: payload.new.is_approved,
+                   createdAt: payload.new.created_at
+                },
+                ...prev
+              ]);
+           }
+
+           if (payload.eventType === 'UPDATE') {
+              setMemories(prev => prev.map(m => m.id === payload.new.id ? { 
+                ...m,
+                isApproved: payload.new.is_approved,
+                aiStory: payload.new.ai_story 
+             } : m));
+           }
+
+           if (payload.eventType === 'DELETE') {
+              setMemories(prev => prev.filter(m => m.id !== payload.old.id));
+           }
+        }
+      )
+      .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+
   }, [id]);
 
   const guestUrl = eventSlug ? `${window.location.origin}/e/${eventSlug}` : '';

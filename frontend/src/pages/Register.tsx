@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { API_URL } from '../lib/config';
 
 const Register = () => {
   const [email, setEmail] = useState('');
@@ -32,13 +33,16 @@ const Register = () => {
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: window.location.origin + '/login',
+        },
       });
 
       if (authError) throw authError;
 
       if (data.session) {
         // 2. Create Profile in Backend
-        const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/register-profile', {
+        const res = await fetch(`${API_URL}/api/host/register-profile`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

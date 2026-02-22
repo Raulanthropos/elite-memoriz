@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../lib/config';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -30,6 +31,9 @@ const Login = () => {
         const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: window.location.origin + '/login',
+          },
         });
 
         if (authError) throw authError;
@@ -37,7 +41,7 @@ const Login = () => {
         if (data.session) {
            // Create Profile
            // Note: We use the endpoint we verified earlier
-           const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/register-profile', {
+           const res = await fetch(`${API_URL}/api/host/register-profile`, {
              method: 'POST',
              headers: {
                  'Content-Type': 'application/json',

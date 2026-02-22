@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X } from 'lucide-react';
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
+import { API_URL } from '../lib/config';
 
 interface EventDetails {
   id: number;
@@ -49,8 +51,8 @@ export const GuestEventPage: React.FC = () => {
     const fetchData = async () => {
       try {
         const [eventRes, memoriesRes] = await Promise.all([
-            fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}`),
-            fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/memories`)
+            fetch(`${API_URL}/api/events/${slug}`),
+            fetch(`${API_URL}/api/events/${slug}/memories`)
         ]);
 
         if (!eventRes.ok) throw new Error('Event not found');
@@ -70,6 +72,76 @@ export const GuestEventPage: React.FC = () => {
       }
     };
     fetchData();
+
+    // Set up Realtime Subscription
+    const channel = supabase
+      .channel('guest_memories_feed')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'memories',
+        },
+        (payload) => {
+           console.log('Guest Realtime Payload:', payload);
+           // We only care about Approved memories for the guest feed
+           if (payload.eventType === 'INSERT' && payload.new.is_approved) {
+              setMemories(prev => [
+                {
+                   id: payload.new.id,
+                   type: payload.new.type,
+                   storagePath: payload.new.storage_path,
+                   originalText: payload.new.original_text,
+                   aiStory: payload.new.ai_story,
+                   isApproved: payload.new.is_approved,
+                   createdAt: payload.new.created_at
+                },
+                ...prev
+              ]);
+           }
+
+           if (payload.eventType === 'UPDATE') {
+              if (payload.new.is_approved) {
+                  // If it was just approved, add it or update it
+                  setMemories(prev => {
+                     const exists = prev.find(m => m.id === payload.new.id);
+                     if (exists) {
+                         return prev.map(m => m.id === payload.new.id ? { 
+                            ...m,
+                            isApproved: true,
+                            aiStory: payload.new.ai_story 
+                         } : m);
+                     } else {
+                         return [{
+                           id: payload.new.id,
+                           type: payload.new.type,
+                           storagePath: payload.new.storage_path,
+                           originalText: payload.new.original_text,
+                           aiStory: payload.new.ai_story,
+                           isApproved: payload.new.is_approved,
+                           createdAt: payload.new.created_at
+                        }, ...prev];
+                     }
+                  });
+              } else {
+                 // If it was unapproved/rejected, remove it from feed
+                 setMemories(prev => prev.filter(m => m.id !== payload.new.id));
+              }
+           }
+
+           if (payload.eventType === 'DELETE') {
+              setMemories(prev => prev.filter(m => m.id !== payload.old.id));
+           }
+        }
+      )
+      .subscribe();
+
+      // Cleanup
+      return () => {
+          supabase.removeChannel(channel);
+      };
+
   }, [slug]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +185,7 @@ export const GuestEventPage: React.FC = () => {
     formData.append('memory', finalCaption); 
 
     try {
-      const res = await fetch(`https://elite-memoriz-production.up.railway.app/api/events/${slug}/upload`, {
+      const res = await fetch(`${API_URL}/api/events/${slug}/upload`, {
         method: 'POST',
         body: formData,
       });

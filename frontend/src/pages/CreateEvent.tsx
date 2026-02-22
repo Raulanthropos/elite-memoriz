@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Check, Star, Zap, Crown, Upload, X } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
 import { DEFAULT_COVERS } from '../utils/image'; // FIX: Removed unused 'getEventCoverUrl'
+import { API_URL } from '../lib/config';
 
 const CreateEvent = () => {
   const navigate = useNavigate();
@@ -98,7 +99,7 @@ const CreateEvent = () => {
           coverImage: finalCoverImage
       };
 
-      const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/events', {
+      const res = await fetch(`${API_URL}/api/host/events`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

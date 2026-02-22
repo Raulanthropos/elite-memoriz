@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { getEventCoverUrl } from '../utils/image';
+import { API_URL } from '../lib/config';
 
 // FIX: Update interface to match DB (UUIDs and Category)
 interface Event {
@@ -34,8 +35,7 @@ const Dashboard = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        // Note: Ensure this URL matches your actual backend environment
-        const res = await fetch('https://elite-memoriz-production.up.railway.app/api/host/events', {
+        const res = await fetch(`${API_URL}/api/host/events`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'

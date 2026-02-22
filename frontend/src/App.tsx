@@ -23,12 +23,17 @@ function App() {
   }, []);
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen bg-gray-900 text-white">Loading...</div>;
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gray-50 text-gray-900">
+        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-4"></div>
+        <p className="text-gray-500 font-medium tracking-wide">Loading Elite Memoriz...</p>
+      </div>
+    );
   }
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-900 text-white font-sans antialiased">
+      <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased">
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
