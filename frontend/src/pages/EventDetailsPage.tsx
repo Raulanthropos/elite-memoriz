@@ -178,6 +178,7 @@ const EventDetailsPage = () => {
   const [showQR, setShowQR] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [isAdmin, setIsAdmin] = useState(false); // NEW: Admin Check
+  const [eventData, setEventData] = useState<any>(null);
 
   // Approve Logic
   const updateStatus = async (memoryId: string, isApproved: boolean) => {
@@ -295,7 +296,10 @@ const EventDetailsPage = () => {
         if (Array.isArray(eventsData)) {
             // FIX: UUID string comparison (no Number() casting)
             const currentEvent = eventsData.find((e: any) => e.id === id);
-            if (currentEvent) setEventSlug(currentEvent.slug);
+            if (currentEvent) {
+                setEventSlug(currentEvent.slug);
+                setEventData(currentEvent);
+            }
         }
 
       } catch (err: any) {
@@ -308,8 +312,9 @@ const EventDetailsPage = () => {
     if (id) fetchData();
 
     // Set up Realtime Subscription for Host
+    const channelId = `host_memories_dashboard_${id}_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel('host_memories_dashboard')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -324,26 +329,29 @@ const EventDetailsPage = () => {
              ? payload.old.event_id 
              : payload.new.event_id;
              
-           if (incomingEventId !== id) return;
+           if (String(incomingEventId) !== String(id)) return;
 
            if (payload.eventType === 'INSERT') {
-              setMemories(prev => [
-                {
-                   id: payload.new.id,
-                   type: payload.new.type,
-                   storagePath: payload.new.storage_path,
-                   originalText: payload.new.original_text,
-                   aiStory: payload.new.ai_story,
-                   isApproved: payload.new.is_approved,
-                   createdAt: payload.new.created_at,
-                   likes: payload.new.likes || 0
-                },
-                ...prev
-              ]);
+              setMemories(prev => {
+                if (prev.some(m => String(m.id) === String(payload.new.id))) return prev;
+                return [
+                  {
+                     id: payload.new.id,
+                     type: payload.new.type,
+                     storagePath: payload.new.storage_path,
+                     originalText: payload.new.original_text,
+                     aiStory: payload.new.ai_story,
+                     isApproved: payload.new.is_approved,
+                     createdAt: payload.new.created_at,
+                     likes: payload.new.likes || 0
+                  },
+                  ...prev
+                ];
+              });
            }
 
            if (payload.eventType === 'UPDATE') {
-              setMemories(prev => prev.map(m => m.id === payload.new.id ? { 
+              setMemories(prev => prev.map(m => String(m.id) === String(payload.new.id) ? { 
                 ...m,
                 isApproved: payload.new.is_approved,
                 aiStory: payload.new.ai_story,
@@ -352,7 +360,7 @@ const EventDetailsPage = () => {
            }
 
            if (payload.eventType === 'DELETE') {
-              setMemories(prev => prev.filter(m => m.id !== payload.old.id));
+              setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
            }
         }
       )
@@ -406,7 +414,38 @@ const EventDetailsPage = () => {
 
         <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Manage Event Memories</h1>
-            <p className="text-gray-400">Review, approve, or reject content uploaded by your guests.</p>
+            <p className="text-gray-400 mb-6">Review, approve, or reject content uploaded by your guests.</p>
+
+            {/* Dynamic Event Banner */}
+            {eventData && (
+                 <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-gray-900 border border-gray-800 rounded-xl">
+                    <span className="text-sm font-semibold text-gray-400">Event Details:</span>
+                    
+                    {/* Tier Badge */}
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        (() => {
+                            const t = String(eventData.package || '').toUpperCase();
+                            if (t === 'PREMIUM' || t === 'PRO') return 'bg-green-600 text-white border border-green-500';
+                            if (t === 'LUXURY' || t === 'VIP') return 'bg-red-600 text-white border border-red-500';
+                            return 'bg-black text-white border border-gray-700';
+                        })()
+                    }`}>
+                        {(() => {
+                            const t = String(eventData.package || '').toUpperCase();
+                            if (t === 'PREMIUM' || t === 'PRO') return 'PREMIUM';
+                            if (t === 'LUXURY' || t === 'VIP') return 'LUXURY';
+                            return 'BASIC';
+                        })()} TIER
+                    </span>
+
+                    <span className="text-gray-600 block h-4 w-px bg-gray-700"></span>
+
+                    {/* Category Badge */}
+                    <span className="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-xs font-medium capitalize border border-gray-700">
+                        {eventData.category}
+                    </span>
+                 </div>
+            )}
         </div>
 
         {loading ? (

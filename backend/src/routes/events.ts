@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import { db } from '../db';
-import { events, memories } from '../db/schema';
+import { events, memories, eventGuests } from '../db/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import { StorageService } from '../services/storage';
 import { AIService } from '../services/ai';
@@ -14,7 +14,7 @@ const upload = multer({ dest: 'uploads/' }); // Clean, simple temp storage
 const TIER_LIMITS = {
   BASIC: { maxUploads: 20, maxStorage: 100 * 1024 * 1024 }, 
   PRO: { maxUploads: 100, maxStorage: 500 * 1024 * 1024 }, 
-  VIP: { maxUploads: Infinity, maxStorage: 2 * 1024 * 1024 * 1024 }, 
+  LUXURY: { maxUploads: Infinity, maxStorage: 2 * 1024 * 1024 * 1024 }, 
 };
 
 // GET /:slug - Retrieve event details
@@ -214,6 +214,68 @@ router.post('/:slug/memories/:id/like', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error liking memory:', error);
     res.status(500).json({ message: 'Internal server error while liking memory' });
+  }
+});
+
+// POST /:slug/join - Register a guest device and check capacity limits
+router.post('/:slug/join', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ message: 'Device ID is required' });
+    }
+
+    const eventResult = await db.select().from(events).where(eq(events.slug, slug));
+    
+    if (eventResult.length === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const event = eventResult[0];
+    const tierKey = (event.package || 'BASIC').toUpperCase();
+
+    // Only apply hard 100-guest limit to BASIC tier (or legacy FREE tier)
+    if (tierKey === 'BASIC' || tierKey === 'FREE') {
+      // 1. Check if this specific device is already in the event_guests table
+      const existingGuest = await db.select()
+        .from(eventGuests)
+        .where(
+          and(
+            eq(eventGuests.eventId, event.id),
+            eq(eventGuests.deviceId, deviceId)
+          )
+        );
+
+      if (existingGuest.length > 0) {
+        return res.status(200).json({ message: 'Welcome back' });
+      }
+
+      // 2. Since they are new, count how many total guests exist
+      const guestCountResult = await db.select({ count: sql<number>`count(*)` })
+        .from(eventGuests)
+        .where(eq(eventGuests.eventId, event.id));
+        
+      const currentGuestCount = Number(guestCountResult[0].count);
+
+      // 3. Prevent new joins if gallery is full
+      if (currentGuestCount >= 100) {
+        return res.status(403).json({ message: 'Gallery Full' });
+      }
+
+      // 4. If space is available, add the new guest device to the DB
+      await db.insert(eventGuests).values({
+        eventId: event.id,
+        deviceId: deviceId
+      });
+    }
+
+    // Return OK
+    res.status(200).json({ message: 'Joined successfully' });
+  } catch (error) {
+    console.error('Error joining event:', error);
+    res.status(500).json({ message: 'Internal server error while joining event' });
   }
 });
 

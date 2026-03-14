@@ -11,7 +11,7 @@ import {
 import { relations } from 'drizzle-orm';
 
 // --- ENUMS & CONSTANTS ---
-export const packageTiers = ['BASIC', 'PREMIUM', 'VIP'] as const;
+export const packageTiers = ['BASIC', 'PREMIUM', 'LUXURY'] as const;
 
 export const profiles = pgTable('profiles', {
   // FIX: Use uuid, not serial. This ID matches auth.users.id directly.
@@ -53,6 +53,13 @@ export const memories = pgTable('memories', {
   isApproved: boolean('is_approved').default(false),
   fileSize: integer('file_size').notNull(),
   likes: integer('likes').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const eventGuests = pgTable('event_guests', {
+  id: serial('id').primaryKey(),
+  eventId: uuid('event_id').references(() => events.id).notNull(),
+  deviceId: varchar('device_id', { length: 255 }).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

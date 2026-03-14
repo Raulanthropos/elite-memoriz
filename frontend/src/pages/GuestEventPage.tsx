@@ -31,6 +31,7 @@ export const GuestEventPage: React.FC = () => {
   const [event, setEvent] = useState<EventDetails | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEventFull, setIsEventFull] = useState(false); // NEW STATE FOR 100-GUEST LIMIT
   
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -55,6 +56,36 @@ export const GuestEventPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // 1. Generate or Retrieve Device ID
+        let deviceId = localStorage.getItem('guest_device_id');
+        if (!deviceId) {
+            // Simple fallback if crypto.randomUUID is not available on insecure HTTP LAN
+            deviceId = typeof crypto !== 'undefined' && crypto.randomUUID 
+                ? crypto.randomUUID() 
+                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            localStorage.setItem('guest_device_id', deviceId);
+        }
+
+        // 2. Register Guest & Check Application Limits
+        const joinRes = await fetch(`${API_URL}/api/events/${slug}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceId })
+        });
+        
+        console.log(`[CLIENT JOIN RES] Status: ${joinRes.status}`);
+
+        if (joinRes.status === 403) {
+            console.log(`[CLIENT JOIN RES] Blocking access!`);
+            setIsEventFull(true);
+            setLoading(false);
+            return; // STOP execution, don't load memories or Realtime
+        }
+
+        // 3. Fetch Data if allowed in
         const [eventRes, memoriesRes] = await Promise.all([
             fetch(`${API_URL}/api/events/${slug}`),
             fetch(`${API_URL}/api/events/${slug}/memories`)
@@ -78,9 +109,12 @@ export const GuestEventPage: React.FC = () => {
     };
     fetchData();
 
+    if (isEventFull) return; // Prevent WebSocket connection if banned
+
     // Set up Realtime Subscription
+    const channelId = `guest_memories_feed_${slug}_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel('guest_memories_feed')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -92,28 +126,32 @@ export const GuestEventPage: React.FC = () => {
            console.log('Guest Realtime Payload:', payload);
            // We only care about Approved memories for the guest feed
             if (payload.eventType === 'INSERT' && payload.new.is_approved) {
-              setMemories(prev => [
-                {
-                   id: payload.new.id,
-                   type: payload.new.type,
-                   storagePath: payload.new.storage_path,
-                   originalText: payload.new.original_text,
-                   aiStory: payload.new.ai_story,
-                   isApproved: payload.new.is_approved,
-                   createdAt: payload.new.created_at,
-                   likes: payload.new.likes || 0
-                },
-                ...prev
-              ]);
+              setMemories(prev => {
+                if (prev.some(m => String(m.id) === String(payload.new.id))) return prev;
+                
+                return [
+                  {
+                     id: payload.new.id,
+                     type: payload.new.type,
+                     storagePath: payload.new.storage_path,
+                     originalText: payload.new.original_text,
+                     aiStory: payload.new.ai_story,
+                     isApproved: payload.new.is_approved,
+                     createdAt: payload.new.created_at,
+                     likes: payload.new.likes || 0
+                  },
+                  ...prev
+                ];
+              });
            }
 
            if (payload.eventType === 'UPDATE') {
               if (payload.new.is_approved) {
                   // If it was just approved, add it or update it
                   setMemories(prev => {
-                     const exists = prev.find(m => m.id === payload.new.id);
+                     const exists = prev.find(m => String(m.id) === String(payload.new.id));
                      if (exists) {
-                         return prev.map(m => m.id === payload.new.id ? { 
+                         return prev.map(m => String(m.id) === String(payload.new.id) ? { 
                             ...m,
                             isApproved: true,
                             aiStory: payload.new.ai_story,
@@ -135,19 +173,19 @@ export const GuestEventPage: React.FC = () => {
                   
                   // Also update selected memory if it's the one receiving the update (like a new like)
                   setSelectedMemory(curr => {
-                     if (curr && curr.id === payload.new.id) {
+                     if (curr && String(curr.id) === String(payload.new.id)) {
                          return { ...curr, likes: payload.new.likes || curr.likes || 0 };
                      }
                      return curr;
                   });
               } else {
                  // If it was unapproved/rejected, remove it from feed
-                 setMemories(prev => prev.filter(m => m.id !== payload.new.id));
+                 setMemories(prev => prev.filter(m => String(m.id) !== String(payload.new.id)));
               }
            }
 
            if (payload.eventType === 'DELETE') {
-              setMemories(prev => prev.filter(m => m.id !== payload.old.id));
+              setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
            }
         }
       )
@@ -158,7 +196,7 @@ export const GuestEventPage: React.FC = () => {
           supabase.removeChannel(channel);
       };
 
-  }, [slug]);
+  }, [slug, isEventFull]);
 
   const handleLike = async (e: React.MouseEvent, memoryId: string) => {
       e.stopPropagation(); // Prevent opening the modal
@@ -168,10 +206,10 @@ export const GuestEventPage: React.FC = () => {
 
       // Optimistically update the UI
       setMemories(prev => prev.map(m => 
-          m.id === memoryId ? { ...m, likes: (m.likes || 0) + 1 } : m
+          String(m.id) === String(memoryId) ? { ...m, likes: (m.likes || 0) + 1 } : m
       ));
       
-      if (selectedMemory && selectedMemory.id === memoryId) {
+      if (selectedMemory && String(selectedMemory.id) === String(memoryId)) {
           setSelectedMemory({ ...selectedMemory, likes: (selectedMemory.likes || 0) + 1 });
       }
 
@@ -258,8 +296,36 @@ export const GuestEventPage: React.FC = () => {
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-purple-600" /></div>;
-  if (!event) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Event not found</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+      </div>
+    );
+  }
+
+  if (isEventFull) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 p-6 text-center">
+          <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+              <Camera className="w-12 h-12 text-red-500" />
+          </div>
+          <h2 className="text-3xl font-serif font-bold text-white mb-4">Gallery Full</h2>
+          <p className="text-gray-400 max-w-md">
+              This event's gallery has reached its maximum capacity of 100 guests. 
+              Please contact the event host to upgrade their package if you wish to participate.
+          </p>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">
+          Event not found
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
@@ -463,7 +529,6 @@ export const GuestEventPage: React.FC = () => {
       {isCropping && rawFileUrl && (
           <ImageCropper 
             imageSrc={rawFileUrl}
-            aspectRatio={4/5} // Vertical aspect ratio for memories
             onCropComplete={onCropComplete}
             onCancel={() => {
                 setIsCropping(false);

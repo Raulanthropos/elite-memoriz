@@ -133,7 +133,7 @@ router.get('/events/:id/memories', async (req: AuthRequest, res: Response) => {
 router.post('/events', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { title, date, category, coverImage } = req.body;
+    const { title, date, category, coverImage, package: reqPackage } = req.body;
 
     if (!title || !date || !category) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -171,7 +171,7 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
       category: category as 'wedding' | 'baptism' | 'party' | 'other',
       coverImage, // Save the cover image (path or URL)
       expiresAt: new Date(new Date(date).getTime() + 30 * 24 * 60 * 60 * 1000), // Expire in 30 days
-      package: profile.tier, // Inherit tier from profile
+      package: reqPackage || profile.tier, // Inherit tier from profile unless explicitly requested
     }).returning();
 
     res.status(201).json(newEvent);

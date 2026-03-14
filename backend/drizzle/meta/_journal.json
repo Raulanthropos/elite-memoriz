@@ -8,6 +8,13 @@
       "when": 1773505243653,
       "tag": "0000_violet_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1773507296731,
+      "tag": "0001_little_scourge",
+      "breakpoints": true
     }
   ]
 }

@@ -268,9 +268,9 @@ const LandingPage = () => {
                     </button>
                 </div>
 
-                {/* VIP */}
+                {/* LUXURY */}
                 <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col hover:shadow-lg transition-shadow">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">VIP</h3>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Luxury</h3>
                     <div className="text-4xl font-extrabold text-gray-900 mb-6">$99<span className="text-base text-gray-500 font-normal"> / event</span></div>
                     <ul className="space-y-4 mb-8 flex-grow">
                         <li className="flex items-center gap-3 text-gray-600 text-sm">

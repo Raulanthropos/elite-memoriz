@@ -12,6 +12,7 @@ interface Event {
   date: string;
   coverImage?: string;
   category: string; // Added category so we can pick the right default cover
+  package: string; // Added Tier
 }
 
 const Dashboard = () => {
@@ -27,6 +28,13 @@ const Dashboard = () => {
       case 'party': return '🎈';
       default: return '✨';
     }
+  };
+
+  const getTierStyle = (pkg?: string) => {
+      const t = String(pkg || '').toUpperCase();
+      if (t === 'PREMIUM' || t === 'PRO') return { label: 'PREMIUM', css: 'bg-green-600 text-white border-green-500/50' };
+      if (t === 'LUXURY' || t === 'VIP') return { label: 'LUXURY', css: 'bg-red-600 text-white border-red-500/50' };
+      return { label: 'BASIC', css: 'bg-black text-white border-gray-700/50' };
   };
 
   useEffect(() => {
@@ -108,6 +116,12 @@ const Dashboard = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                   
+                  {/* Tier Badge (Top Left) */}
+                  <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg backdrop-blur-md border ${getTierStyle(event.package).css}`}>
+                    {getTierStyle(event.package).label}
+                  </div>
+
+                  {/* Category Emoji (Top Right) */}
                   <div className="absolute top-4 right-4 bg-gray-900/80 backdrop-blur-sm border border-gray-700 px-3 py-1 rounded-full text-xl shadow-lg">
                     {getCategoryIcon(event.category)}
                   </div>

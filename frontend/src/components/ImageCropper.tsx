@@ -60,7 +60,6 @@ const ImageCropper = ({ imageSrc, aspectRatio = 16 / 9, onCropComplete, onCancel
           crop={crop}
           onChange={(_, percentCrop) => setCrop(percentCrop)}
           onComplete={(c) => setCompletedCrop(c)}
-          aspect={aspectRatio}
           className="max-h-full max-w-full"
         >
           <img 
@@ -68,7 +67,7 @@ const ImageCropper = ({ imageSrc, aspectRatio = 16 / 9, onCropComplete, onCancel
              src={imageSrc} 
              alt="Crop preview" 
              onLoad={onImageLoad}
-             className="max-h-[65vh] object-contain"
+             className="max-h-[65vh] w-auto block mx-auto"
           />
         </ReactCrop>
       </div>

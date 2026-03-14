@@ -35,7 +35,7 @@ const CreateEvent = () => {
   const tiers = [
       { id: 'BASIC', name: 'Basic', price: 'Free', icon: <Star size={24} className="text-gray-400"/>, features: ['1 Event', '100MB Storage', 'Basic Support'] },
       { id: 'PREMIUM', name: 'Pro', price: '$9', icon: <Zap size={24} className="text-yellow-400"/>, features: ['5 Events', '1GB Storage', 'Priority Support'] },
-      { id: 'VIP', name: 'VIP', price: '$29', icon: <Crown size={24} className="text-purple-400"/>, features: ['Unlimited Events', '10GB Storage', 'Dedicated Agent'] },
+      { id: 'LUXURY', name: 'Luxury', price: '$29', icon: <Crown size={24} className="text-red-400"/>, features: ['Unlimited Events', '10GB Storage', 'Dedicated Agent'] },
   ];
 
   const nextStep = (e?: React.FormEvent) => {
