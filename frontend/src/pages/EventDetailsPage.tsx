@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText, Heart } from 'lucide-react';
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 import { API_URL } from '../lib/config';
 
@@ -15,6 +15,7 @@ interface Memory {
   aiStory?: string;
   isApproved: boolean;
   createdAt: string;
+  likes: number;
 }
 
 // Memory Card Component
@@ -51,7 +52,7 @@ const MemoryCard = ({
               </div>
           )}
           
-          <div className="absolute top-3 right-3 z-10">
+          <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 items-end">
               <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold text-white shadow-sm backdrop-blur-md flex items-center gap-1 ${
                   memory.isApproved 
                       ? 'bg-green-600/90' 
@@ -60,6 +61,15 @@ const MemoryCard = ({
                   {memory.isApproved ? <CheckCircle size={10} /> : <AlertTriangle size={10} />}
                   {memory.isApproved ? 'Live' : 'Pending'}
               </span>
+              
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold shadow-sm backdrop-blur-md transition-colors ${
+                  memory.likes > 0 
+                      ? 'bg-white/90 text-red-500' 
+                      : 'bg-gray-800/80 text-gray-400'
+              }`}>
+                  <Heart size={12} className={memory.likes > 0 ? "fill-current" : ""} />
+                  {memory.likes || 0}
+              </div>
           </div>
       </div>
       
@@ -325,7 +335,8 @@ const EventDetailsPage = () => {
                    originalText: payload.new.original_text,
                    aiStory: payload.new.ai_story,
                    isApproved: payload.new.is_approved,
-                   createdAt: payload.new.created_at
+                   createdAt: payload.new.created_at,
+                   likes: payload.new.likes || 0
                 },
                 ...prev
               ]);
@@ -335,7 +346,8 @@ const EventDetailsPage = () => {
               setMemories(prev => prev.map(m => m.id === payload.new.id ? { 
                 ...m,
                 isApproved: payload.new.is_approved,
-                aiStory: payload.new.ai_story 
+                aiStory: payload.new.ai_story,
+                likes: payload.new.likes || m.likes || 0
              } : m));
            }
 

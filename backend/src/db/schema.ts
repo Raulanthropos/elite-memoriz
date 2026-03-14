@@ -52,6 +52,7 @@ export const memories = pgTable('memories', {
   aiStory: text('ai_story'), // The rewritten story
   isApproved: boolean('is_approved').default(false),
   fileSize: integer('file_size').notNull(),
+  likes: integer('likes').default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

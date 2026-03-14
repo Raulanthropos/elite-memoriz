@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, ArrowLeft } from 'lucide-react';
+import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, ArrowLeft, Heart } from 'lucide-react';
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
@@ -23,6 +23,7 @@ interface Memory {
   aiStory?: string; 
   isApproved: boolean; 
   createdAt: string; 
+  likes: number;
 }
 
 export const GuestEventPage: React.FC = () => {
@@ -44,6 +45,9 @@ export const GuestEventPage: React.FC = () => {
   // Form State
   const [guestName, setGuestName] = useState('Guest');
   const [caption, setCaption] = useState('');
+  
+  // Story Modal State
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,7 +91,7 @@ export const GuestEventPage: React.FC = () => {
         (payload) => {
            console.log('Guest Realtime Payload:', payload);
            // We only care about Approved memories for the guest feed
-           if (payload.eventType === 'INSERT' && payload.new.is_approved) {
+            if (payload.eventType === 'INSERT' && payload.new.is_approved) {
               setMemories(prev => [
                 {
                    id: payload.new.id,
@@ -96,7 +100,8 @@ export const GuestEventPage: React.FC = () => {
                    originalText: payload.new.original_text,
                    aiStory: payload.new.ai_story,
                    isApproved: payload.new.is_approved,
-                   createdAt: payload.new.created_at
+                   createdAt: payload.new.created_at,
+                   likes: payload.new.likes || 0
                 },
                 ...prev
               ]);
@@ -111,7 +116,8 @@ export const GuestEventPage: React.FC = () => {
                          return prev.map(m => m.id === payload.new.id ? { 
                             ...m,
                             isApproved: true,
-                            aiStory: payload.new.ai_story 
+                            aiStory: payload.new.ai_story,
+                            likes: payload.new.likes || m.likes || 0
                          } : m);
                      } else {
                          return [{
@@ -121,9 +127,18 @@ export const GuestEventPage: React.FC = () => {
                            originalText: payload.new.original_text,
                            aiStory: payload.new.ai_story,
                            isApproved: payload.new.is_approved,
-                           createdAt: payload.new.created_at
+                           createdAt: payload.new.created_at,
+                           likes: payload.new.likes || 0
                         }, ...prev];
                      }
+                  });
+                  
+                  // Also update selected memory if it's the one receiving the update (like a new like)
+                  setSelectedMemory(curr => {
+                     if (curr && curr.id === payload.new.id) {
+                         return { ...curr, likes: payload.new.likes || curr.likes || 0 };
+                     }
+                     return curr;
                   });
               } else {
                  // If it was unapproved/rejected, remove it from feed
@@ -144,6 +159,32 @@ export const GuestEventPage: React.FC = () => {
       };
 
   }, [slug]);
+
+  const handleLike = async (e: React.MouseEvent, memoryId: string) => {
+      e.stopPropagation(); // Prevent opening the modal
+      
+      const likeKey = `liked_${memoryId}`;
+      if (localStorage.getItem(likeKey)) return; // Already liked locally, one-way action
+
+      // Optimistically update the UI
+      setMemories(prev => prev.map(m => 
+          m.id === memoryId ? { ...m, likes: (m.likes || 0) + 1 } : m
+      ));
+      
+      if (selectedMemory && selectedMemory.id === memoryId) {
+          setSelectedMemory({ ...selectedMemory, likes: (selectedMemory.likes || 0) + 1 });
+      }
+
+      // Mark locally
+      localStorage.setItem(likeKey, 'true');
+
+      // Call Backend
+      try {
+          await fetch(`${API_URL}/api/events/${slug}/memories/${memoryId}/like`, { method: 'POST' });
+      } catch (err) {
+          console.error('Failed to like memory', err);
+      }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -335,14 +376,88 @@ export const GuestEventPage: React.FC = () => {
             </div>
         ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {memories.map(memory => (
-                    <div key={memory.id} className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm">
+                {memories.map(memory => {
+                    const isLiked = !!localStorage.getItem(`liked_${memory.id}`);
+                    return (
+                    <div 
+                        key={memory.id} 
+                        className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm cursor-pointer group"
+                        onClick={() => setSelectedMemory(memory)}
+                    >
                         <img src={getImageUrl(memory.storagePath)} alt="Memory" className="w-full h-full object-cover" loading="lazy"/>
+                        
+                        {/* Like Overlay */}
+                        <div className="absolute bottom-2 right-2 z-10">
+                            <button 
+                                onClick={(e) => handleLike(e, memory.id)}
+                                disabled={isLiked}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-md shadow-lg transition-all ${isLiked ? 'bg-white text-red-500' : 'bg-black/40 text-white hover:bg-black/60'}`}
+                            >
+                                <Heart size={14} className={isLiked ? "fill-current" : ""} />
+                                {memory.likes || 0}
+                            </button>
+                        </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         )}
       </div>
+
+      {/* STORY MODAL */}
+      {selectedMemory && (
+          <div className="fixed inset-0 bg-black/95 z-50 flex flex-col overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedMemory(null)}>
+              
+              <button onClick={() => setSelectedMemory(null)} className="absolute top-4 right-4 z-50 p-2 bg-black/50 text-white rounded-full hover:bg-white/20 transition-colors">
+                  <X size={24} />
+              </button>
+
+              <div className="max-w-3xl mx-auto w-full min-h-screen flex flex-col md:flex-row py-12 px-4 md:px-6 md:items-center gap-6" onClick={e => e.stopPropagation()}>
+                  
+                  {/* Left Side: Image */}
+                  <div className="w-full md:w-1/2 flex-shrink-0 flex items-center justify-center">
+                      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-gray-800">
+                          <img src={getImageUrl(selectedMemory.storagePath)} className="w-full h-auto max-h-[70vh] object-contain bg-gray-900" alt="Memory" />
+                          <div className="absolute bottom-4 right-4 z-10">
+                              <button 
+                                  onClick={(e) => handleLike(e, selectedMemory.id)}
+                                  disabled={!!localStorage.getItem(`liked_${selectedMemory.id}`)}
+                                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold backdrop-blur-md shadow-xl transition-all ${localStorage.getItem(`liked_${selectedMemory.id}`) ? 'bg-white text-red-500 scale-105' : 'bg-black/50 text-white hover:bg-black/70'}`}
+                              >
+                                  <Heart size={18} className={localStorage.getItem(`liked_${selectedMemory.id}`) ? "fill-current" : ""} />
+                                  {selectedMemory.likes || 0}
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Right Side: Details */}
+                  <div className="w-full md:w-1/2 text-white space-y-6 md:pl-4">
+                      <div className="inline-block px-3 py-1 bg-white/10 rounded-full text-xs font-medium text-gray-300">
+                          {new Date(selectedMemory.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short'})}
+                      </div>
+                      
+                      {selectedMemory.originalText && (
+                          <div className="space-y-2">
+                              <h4 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Guest's Message</h4>
+                              <p className="text-gray-200 text-lg italic border-l-2 border-indigo-500 pl-4">"{selectedMemory.originalText}"</p>
+                          </div>
+                      )}
+
+                      {selectedMemory.aiStory && (
+                          <div className="space-y-3 bg-white/5 p-6 rounded-2xl border border-white/10 shadow-inner">
+                              <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                  <span>✨ AI Memory Box</span>
+                              </h4>
+                              <p className="text-white text-md leading-relaxed font-serif whitespace-pre-wrap">
+                                  {selectedMemory.aiStory}
+                              </p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* CROPPER MODAL - Rendered Conditionally */}
       {isCropping && rawFileUrl && (

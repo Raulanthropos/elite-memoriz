@@ -197,4 +197,24 @@ const cleanOriginal = memory || '';
   }
 });
 
+// POST /:slug/memories/:id/like - Increment likes for a memory
+router.post('/:slug/memories/:id/like', async (req: Request, res: Response) => {
+  try {
+    const memoryId = parseInt(req.params.id);
+    
+    if (isNaN(memoryId)) {
+        return res.status(400).json({ message: 'Invalid memory ID format' });
+    }
+
+    await db.update(memories)
+      .set({ likes: sql`${memories.likes} + 1` })
+      .where(eq(memories.id, memoryId));
+
+    res.status(200).json({ message: 'Memory liked successfully' });
+  } catch (error) {
+    console.error('Error liking memory:', error);
+    res.status(500).json({ message: 'Internal server error while liking memory' });
+  }
+});
+
 export const eventRoutes = router;
