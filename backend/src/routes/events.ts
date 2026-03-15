@@ -9,12 +9,112 @@ import { AIService } from '../services/ai';
 import { TIER_LIMITS, parseTier } from '../lib/tiers';
 
 const router = Router();
-const upload = multer({ dest: 'uploads/' }); // Clean, simple temp storage
+const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
+const MAX_MEMORY_TEXT_LENGTH = 1_000;
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: MAX_UPLOAD_SIZE_BYTES,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new Error('Only image uploads are allowed'));
+      return;
+    }
+
+    cb(null, true);
+  },
+}); // Clean, simple temp storage
+
+const uploadSinglePhoto = (req: Request, res: Response, next: (error?: unknown) => void) => {
+  upload.single('photo')(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({ message: 'Photo exceeds 15MB upload limit' });
+      return;
+    }
+
+    if (error instanceof Error) {
+      res.status(400).json({ message: error.message });
+      return;
+    }
+
+    res.status(400).json({ message: 'Invalid upload request' });
+  });
+};
+
+const getSlugOrRespond = (req: Request, res: Response): string | null => {
+  const slug = typeof req.params.slug === 'string' ? req.params.slug.trim() : '';
+
+  if (!slug || slug.length > 255 || !SLUG_PATTERN.test(slug)) {
+    res.status(400).json({ message: 'Invalid event slug' });
+    return null;
+  }
+
+  return slug;
+};
+
+const cleanupTempUpload = (file?: Express.Multer.File) => {
+  if (file?.path && fs.existsSync(file.path)) {
+    try {
+      fs.unlinkSync(file.path);
+    } catch (error) {
+      console.error('Temp upload cleanup failed:', error);
+    }
+  }
+};
+
+const isEventExpired = (event: { isExpired: boolean | null; expiresAt: Date | null }) => {
+  return Boolean(event.isExpired) || (event.expiresAt != null && new Date() > event.expiresAt);
+};
+
+const parseMemoryIdOrRespond = (req: Request, res: Response): number | null => {
+  const memoryId = Number.parseInt(req.params.id, 10);
+
+  if (!Number.isInteger(memoryId) || memoryId <= 0) {
+    res.status(400).json({ message: 'Invalid memory ID format' });
+    return null;
+  }
+
+  return memoryId;
+};
+
+const sanitizeMemoryText = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().slice(0, MAX_MEMORY_TEXT_LENGTH);
+};
+
+const getDeviceIdOrRespond = (req: Request, res: Response): string | null => {
+  if (typeof req.body?.deviceId !== 'string') {
+    res.status(400).json({ message: 'Device ID is required' });
+    return null;
+  }
+
+  const deviceId = req.body.deviceId.trim();
+  if (!deviceId || deviceId.length > 255) {
+    res.status(400).json({ message: 'Invalid device ID' });
+    return null;
+  }
+
+  return deviceId;
+};
 
 // GET /:slug - Retrieve event details
 router.get('/:slug', async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
+      return;
+    }
     
     // Fetch event
     const event = await db.query.events.findFirst({
@@ -25,7 +125,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    if (event.isExpired || new Date() > event.expiresAt) {
+    if (isEventExpired(event)) {
       return res.status(403).json({ message: 'Event has expired' });
     }
 
@@ -47,13 +147,19 @@ router.get('/:slug', async (req: Request, res: Response) => {
 // GET /:slug/memories - Fetch approved memories for public gallery
 router.get('/:slug/memories', async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
+      return;
+    }
     
     const event = await db.query.events.findFirst({
       where: eq(events.slug, slug),
     });
 
     if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (isEventExpired(event)) {
+      return res.status(403).json({ message: 'Event has expired' });
+    }
 
     const eventMemories = await db.query.memories.findMany({
       where: and(
@@ -72,13 +178,15 @@ router.get('/:slug/memories', async (req: Request, res: Response) => {
 });
 
 // POST /:slug/upload - Guest upload
-router.post('/:slug/upload', upload.single('photo'), async (req: Request, res: Response) => {
+router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
-    let { memory } = req.body; // Multer parses this
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
+      cleanupTempUpload(req.file);
+      return;
+    }
 
-// FIX: Trust the raw input. Do not convert manually.
-const cleanOriginal = memory || '';
+    const cleanOriginal = sanitizeMemoryText(req.body?.memory);
     
     console.log('Saving to DB - Original:', cleanOriginal);
 
@@ -98,13 +206,13 @@ const cleanOriginal = memory || '';
 
     if (!event) {
       // Cleanup file if event not found
-      fs.unlinkSync(file.path);
+      cleanupTempUpload(file);
       return res.status(404).json({ message: 'Event not found' });
     }
 
     // Check Expiration
-    if (event.isExpired || new Date() > event.expiresAt) {
-      fs.unlinkSync(file.path);
+    if (isEventExpired(event)) {
+      cleanupTempUpload(file);
       return res.status(403).json({ message: 'This event has expired. No new memories can be added.' });
     }
 
@@ -117,7 +225,7 @@ const cleanOriginal = memory || '';
 
     const tier = parseTier(event.package);
     if (!tier) {
-      fs.unlinkSync(file.path);
+      cleanupTempUpload(file);
       return res.status(500).json({ message: 'Event has invalid tier configuration' });
     }
 
@@ -126,12 +234,12 @@ const cleanOriginal = memory || '';
     console.log(`Uploading to Tier: ${tier}`); // Debug log
 
     if (currentUploadCount >= limits.maxUploads) {
-      fs.unlinkSync(file.path);
+      cleanupTempUpload(file);
       return res.status(403).json({ message: `Upload limit reached for ${event.package} tier.` });
     }
 
     if (currentStorageUsed + file.size > limits.maxStorageBytes) {
-      fs.unlinkSync(file.path);
+      cleanupTempUpload(file);
       return res.status(403).json({ message: `Storage limit reached for ${event.package} tier.` });
     }
 
@@ -168,7 +276,7 @@ const cleanOriginal = memory || '';
     });
 
     // Cleanup local file
-    fs.unlinkSync(file.path);
+    cleanupTempUpload(file);
 
     res.status(201).json({ 
       message: 'Memory captured successfully!', 
@@ -177,26 +285,46 @@ const cleanOriginal = memory || '';
 
   } catch (error) {
     console.error('Upload handler error:', error);
-    // Attempt cleanup if file exists
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (e) {}
-    }
+    cleanupTempUpload(req.file);
 
-    res.status(500).json({ 
-      message: (error as Error).message, 
-      stack: (error as Error).stack, 
-      detail: error 
-    });
+    res.status(500).json({ message: 'Internal server error while uploading memory' });
   }
 });
 
 // POST /:slug/memories/:id/like - Increment likes for a memory
 router.post('/:slug/memories/:id/like', async (req: Request, res: Response) => {
   try {
-    const memoryId = parseInt(req.params.id);
-    
-    if (isNaN(memoryId)) {
-        return res.status(400).json({ message: 'Invalid memory ID format' });
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
+      return;
+    }
+
+    const memoryId = parseMemoryIdOrRespond(req, res);
+    if (memoryId == null) {
+      return;
+    }
+
+    const event = await db.query.events.findFirst({
+      where: eq(events.slug, slug),
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    if (isEventExpired(event)) {
+      return res.status(403).json({ message: 'Event has expired' });
+    }
+
+    const memory = await db.query.memories.findFirst({
+      where: and(
+        eq(memories.id, memoryId),
+        eq(memories.eventId, event.id),
+        eq(memories.isApproved, true)
+      ),
+    });
+
+    if (!memory) {
+      return res.status(404).json({ message: 'Memory not found' });
     }
 
     await db.update(memories)
@@ -213,11 +341,14 @@ router.post('/:slug/memories/:id/like', async (req: Request, res: Response) => {
 // POST /:slug/join - Register a guest device and check capacity limits
 router.post('/:slug/join', async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
-    const { deviceId } = req.body;
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
+      return;
+    }
 
+    const deviceId = getDeviceIdOrRespond(req, res);
     if (!deviceId) {
-      return res.status(400).json({ message: 'Device ID is required' });
+      return;
     }
 
     const eventResult = await db.select().from(events).where(eq(events.slug, slug));
@@ -227,6 +358,9 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
     }
 
     const event = eventResult[0];
+    if (isEventExpired(event)) {
+      return res.status(403).json({ message: 'Event has expired' });
+    }
     const tier = parseTier(event.package);
 
     if (!tier) {
