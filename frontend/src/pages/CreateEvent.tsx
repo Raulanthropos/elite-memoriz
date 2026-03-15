@@ -34,9 +34,9 @@ const CreateEvent = () => {
   ];
 
   const tiers = [
-      { id: TIERS[0], name: 'Basic', price: 'Free', icon: <Star size={24} className="text-gray-400"/>, features: ['1 Event', '20 Uploads', '100MB Storage'] },
-      { id: TIERS[1], name: 'Premium', price: '$9', icon: <Zap size={24} className="text-yellow-400"/>, features: ['100 Uploads', '500MB Storage', 'Priority Support'] },
-      { id: TIERS[2], name: 'Luxury', price: '$29', icon: <Crown size={24} className="text-red-400"/>, features: ['Unlimited Uploads', '2GB Storage', 'Dedicated Agent'] },
+      { id: TIERS[0], name: 'Basic', price: '€19', icon: <Star size={24} className="text-gray-400"/>, features: ['1 Event', '20 Uploads', '100MB Storage'] },
+      { id: TIERS[1], name: 'Premium', price: '€49', icon: <Zap size={24} className="text-yellow-400"/>, features: ['100 Uploads', '500MB Storage', 'Priority Support'] },
+      { id: TIERS[2], name: 'Luxury', price: '€139', icon: <Crown size={24} className="text-red-400"/>, features: ['Unlimited Uploads', '2GB Storage', 'Dedicated Agent'] },
   ];
 
   const nextStep = (e?: React.FormEvent) => {

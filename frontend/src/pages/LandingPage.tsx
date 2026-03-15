@@ -222,7 +222,7 @@ const LandingPage = () => {
                 {/* Basic */}
                 <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col hover:shadow-lg transition-shadow">
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">Basic</h3>
-                    <div className="text-4xl font-extrabold text-gray-900 mb-6">Free<span className="text-base text-gray-500 font-normal"> / event</span></div>
+                    <div className="text-4xl font-extrabold text-gray-900 mb-6">€19<span className="text-base text-gray-500 font-normal"> / event</span></div>
                     <ul className="space-y-4 mb-8 flex-grow">
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 1 Month Access
@@ -245,7 +245,7 @@ const LandingPage = () => {
                         POPULAR
                     </div>
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">Premium</h3>
-                    <div className="text-4xl font-extrabold text-indigo-600 mb-6">$29<span className="text-base text-gray-500 font-normal"> / event</span></div>
+                    <div className="text-4xl font-extrabold text-indigo-600 mb-6">€49<span className="text-base text-gray-500 font-normal"> / event</span></div>
                     <ul className="space-y-4 mb-8 flex-grow">
                         <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 3 Months Access
@@ -271,7 +271,7 @@ const LandingPage = () => {
                 {/* LUXURY */}
                 <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col hover:shadow-lg transition-shadow">
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">Luxury</h3>
-                    <div className="text-4xl font-extrabold text-gray-900 mb-6">$99<span className="text-base text-gray-500 font-normal"> / event</span></div>
+                    <div className="text-4xl font-extrabold text-gray-900 mb-6">€139<span className="text-base text-gray-500 font-normal"> / event</span></div>
                     <ul className="space-y-4 mb-8 flex-grow">
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 6 Months Access

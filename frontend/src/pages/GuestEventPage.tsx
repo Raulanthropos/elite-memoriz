@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, ArrowLeft, Heart } from 'lucide-react';
+import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, LogOut, Heart } from 'lucide-react';
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
@@ -337,13 +337,14 @@ export const GuestEventPage: React.FC = () => {
             alt={event.title}
             className="w-full h-full object-cover"
           />
-          {/* Back Button */}
+          {/* Exit Button */}
           <button 
-             onClick={() => navigate('/')} 
-             className="absolute top-4 left-4 z-20 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all"
-             aria-label="Go Back"
+             onClick={() => navigate('/exit')}
+             className="absolute top-4 left-4 z-20 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full transition-all flex items-center gap-2"
+             aria-label="Exit event gallery"
           >
-             <ArrowLeft size={24} />
+             <LogOut size={18} />
+             <span className="text-sm font-medium">Exit</span>
           </button>
           
           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-4 text-center backdrop-blur-[2px]">

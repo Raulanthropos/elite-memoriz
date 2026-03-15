@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateEvent from './pages/CreateEvent';
 import EventDetails from './pages/EventDetailsPage';
+import ExitPage from './pages/ExitPage';
 import { GuestEventPage } from './pages/GuestEventPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { supabase } from './lib/supabase';
@@ -41,6 +42,7 @@ function App() {
           
           {/* Guest Route */}
           <Route path="/e/:slug" element={<GuestEventPage />} />
+          <Route path="/exit" element={<ExitPage />} />
 
           <Route 
             path="/dashboard" 
