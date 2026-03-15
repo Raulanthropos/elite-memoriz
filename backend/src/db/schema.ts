@@ -9,9 +9,10 @@ import {
   uuid
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { TIERS } from '../lib/tiers';
 
 // --- ENUMS & CONSTANTS ---
-export const packageTiers = ['BASIC', 'PREMIUM', 'LUXURY'] as const;
+export const packageTiers = TIERS;
 
 export const profiles = pgTable('profiles', {
   // FIX: Use uuid, not serial. This ID matches auth.users.id directly.

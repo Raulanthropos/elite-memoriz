@@ -228,7 +228,7 @@ const LandingPage = () => {
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 1 Month Access
                         </li>
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Up to 50 Guests
+                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Up to 100 Guests
                         </li>
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Standard Resolution
@@ -239,12 +239,12 @@ const LandingPage = () => {
                     </button>
                 </div>
 
-                {/* Pro */}
+                {/* Premium */}
                 <div className="bg-white rounded-3xl p-8 border-2 border-indigo-500 relative flex flex-col shadow-2xl shadow-indigo-100 transform md:-translate-y-4">
                     <div className="absolute top-0 right-8 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-b-lg">
                         POPULAR
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Pro</h3>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Premium</h3>
                     <div className="text-4xl font-extrabold text-indigo-600 mb-6">$29<span className="text-base text-gray-500 font-normal"> / event</span></div>
                     <ul className="space-y-4 mb-8 flex-grow">
                         <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
@@ -277,7 +277,7 @@ const LandingPage = () => {
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 6 Months Access
                         </li>
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Everything in Pro
+                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Everything in Premium
                         </li>
                         <li className="flex items-center gap-3 text-gray-600 text-sm">
                             <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> AI Video Montage

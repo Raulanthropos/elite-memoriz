@@ -15,6 +15,13 @@
       "when": 1773507296731,
       "tag": "0001_little_scourge",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1773507296732,
+      "tag": "0002_replace_pro_with_premium",
+      "breakpoints": true
     }
   ]
 }

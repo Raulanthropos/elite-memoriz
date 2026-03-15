@@ -4,6 +4,7 @@ import * as schema from '../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { StorageService } from '../services/storage';
+import { TIER_LIMITS, parseTier } from '../lib/tiers';
 
 const router = Router();
 
@@ -145,16 +146,27 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
 
     if (!profile) return res.status(404).json({ message: 'Profile not found' });
 
+    const requestedTier = reqPackage == null ? null : parseTier(reqPackage);
+    if (reqPackage != null && !requestedTier) {
+      return res.status(400).json({ message: 'Invalid package tier' });
+    }
+
+    const profileTier = parseTier(profile.tier);
+    if (!profileTier) {
+      return res.status(500).json({ message: 'Profile has invalid tier configuration' });
+    }
+
+    const eventTier = requestedTier ?? profileTier;
+
     // Check Limits
     const existingEventsCount = await db.select({ count: sql<number>`count(*)` })
         .from(schema.events)
         .where(eq(schema.events.userId, userId));
     const count = Number(existingEventsCount[0].count);
 
-    // Basic Plan Limit: 1 Event
-    if (profile.tier === 'BASIC' && count >= 1) {
+    if (count >= TIER_LIMITS[profileTier].maxEvents) {
         return res.status(403).json({ 
-            message: 'Basic Plan limit reached (1 Event). Please upgrade to create more.' 
+            message: `${profileTier.charAt(0)}${profileTier.slice(1).toLowerCase()} plan limit reached. Please upgrade to create more.` 
         });
     }
 
@@ -171,7 +183,7 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
       category: category as 'wedding' | 'baptism' | 'party' | 'other',
       coverImage, // Save the cover image (path or URL)
       expiresAt: new Date(new Date(date).getTime() + 30 * 24 * 60 * 60 * 1000), // Expire in 30 days
-      package: reqPackage || profile.tier, // Inherit tier from profile unless explicitly requested
+      package: eventTier, // Inherit tier from profile unless explicitly requested
     }).returning();
 
     res.status(201).json(newEvent);

@@ -6,16 +6,10 @@ import { events, memories, eventGuests } from '../db/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import { StorageService } from '../services/storage';
 import { AIService } from '../services/ai';
+import { TIER_LIMITS, parseTier } from '../lib/tiers';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' }); // Clean, simple temp storage
-
-// Tier Limits
-const TIER_LIMITS = {
-  BASIC: { maxUploads: 20, maxStorage: 100 * 1024 * 1024 }, 
-  PRO: { maxUploads: 100, maxStorage: 500 * 1024 * 1024 }, 
-  LUXURY: { maxUploads: Infinity, maxStorage: 2 * 1024 * 1024 * 1024 }, 
-};
 
 // GET /:slug - Retrieve event details
 router.get('/:slug', async (req: Request, res: Response) => {
@@ -121,23 +115,22 @@ const cleanOriginal = memory || '';
     const currentUploadCount = Number(uploadCountResult[0].count);
     const currentStorageUsed = event.storageUsed || 0;
 
-    // NEW (Fix)
-    // 1. Force uppercase to handle "basic" vs "BASIC"
-    // 2. Default to 'BASIC' if the value is missing or weird
-    const tierKey = (event.package || 'BASIC').toUpperCase();
+    const tier = parseTier(event.package);
+    if (!tier) {
+      fs.unlinkSync(file.path);
+      return res.status(500).json({ message: 'Event has invalid tier configuration' });
+    }
 
-    // 3. Lookup the tier, but if it fails, FALLBACK to BASIC limits.
-    // This guarantees 'limits' is never undefined.
-    const limits = (TIER_LIMITS as any)[tierKey] || TIER_LIMITS.BASIC;
+    const limits = TIER_LIMITS[tier];
 
-    console.log(`Uploading to Tier: ${tierKey}, Limits found:`, !!limits); // Debug log
+    console.log(`Uploading to Tier: ${tier}`); // Debug log
 
     if (currentUploadCount >= limits.maxUploads) {
       fs.unlinkSync(file.path);
       return res.status(403).json({ message: `Upload limit reached for ${event.package} tier.` });
     }
 
-    if (currentStorageUsed + file.size > limits.maxStorage) {
+    if (currentStorageUsed + file.size > limits.maxStorageBytes) {
       fs.unlinkSync(file.path);
       return res.status(403).json({ message: `Storage limit reached for ${event.package} tier.` });
     }
@@ -234,10 +227,13 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
     }
 
     const event = eventResult[0];
-    const tierKey = (event.package || 'BASIC').toUpperCase();
+    const tier = parseTier(event.package);
 
-    // Only apply hard 100-guest limit to BASIC tier (or legacy FREE tier)
-    if (tierKey === 'BASIC' || tierKey === 'FREE') {
+    if (!tier) {
+      return res.status(500).json({ message: 'Event has invalid tier configuration' });
+    }
+
+    if (Number.isFinite(TIER_LIMITS[tier].maxGuests)) {
       // 1. Check if this specific device is already in the event_guests table
       const existingGuest = await db.select()
         .from(eventGuests)
@@ -260,7 +256,7 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
       const currentGuestCount = Number(guestCountResult[0].count);
 
       // 3. Prevent new joins if gallery is full
-      if (currentGuestCount >= 100) {
+      if (currentGuestCount >= TIER_LIMITS[tier].maxGuests) {
         return res.status(403).json({ message: 'Gallery Full' });
       }
 

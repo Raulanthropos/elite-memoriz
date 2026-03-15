@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText, Heart } from 'lucide-react';
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 import { API_URL } from '../lib/config';
+import { getTierBannerBadge } from '../lib/tiers';
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {
@@ -417,25 +418,15 @@ const EventDetailsPage = () => {
             <p className="text-gray-400 mb-6">Review, approve, or reject content uploaded by your guests.</p>
 
             {/* Dynamic Event Banner */}
-            {eventData && (
+            {eventData && (() => {
+                 const tierBadge = getTierBannerBadge(eventData.package);
+                 return (
                  <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-gray-900 border border-gray-800 rounded-xl">
                     <span className="text-sm font-semibold text-gray-400">Event Details:</span>
                     
                     {/* Tier Badge */}
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        (() => {
-                            const t = String(eventData.package || '').toUpperCase();
-                            if (t === 'PREMIUM' || t === 'PRO') return 'bg-green-600 text-white border border-green-500';
-                            if (t === 'LUXURY' || t === 'VIP') return 'bg-red-600 text-white border border-red-500';
-                            return 'bg-black text-white border border-gray-700';
-                        })()
-                    }`}>
-                        {(() => {
-                            const t = String(eventData.package || '').toUpperCase();
-                            if (t === 'PREMIUM' || t === 'PRO') return 'PREMIUM';
-                            if (t === 'LUXURY' || t === 'VIP') return 'LUXURY';
-                            return 'BASIC';
-                        })()} TIER
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${tierBadge.css}`}>
+                        {tierBadge.label} TIER
                     </span>
 
                     <span className="text-gray-600 block h-4 w-px bg-gray-700"></span>
@@ -445,7 +436,8 @@ const EventDetailsPage = () => {
                         {eventData.category}
                     </span>
                  </div>
-            )}
+                 );
+            })()}
         </div>
 
         {loading ? (

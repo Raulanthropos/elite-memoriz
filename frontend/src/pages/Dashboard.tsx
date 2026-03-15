@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { getEventCoverUrl } from '../utils/image';
 import { API_URL } from '../lib/config';
+import { getTierBadge } from '../lib/tiers';
 
 // FIX: Update interface to match DB (UUIDs and Category)
 interface Event {
@@ -28,13 +29,6 @@ const Dashboard = () => {
       case 'party': return '🎈';
       default: return '✨';
     }
-  };
-
-  const getTierStyle = (pkg?: string) => {
-      const t = String(pkg || '').toUpperCase();
-      if (t === 'PREMIUM' || t === 'PRO') return { label: 'PREMIUM', css: 'bg-green-600 text-white border-green-500/50' };
-      if (t === 'LUXURY' || t === 'VIP') return { label: 'LUXURY', css: 'bg-red-600 text-white border-red-500/50' };
-      return { label: 'BASIC', css: 'bg-black text-white border-gray-700/50' };
   };
 
   useEffect(() => {
@@ -105,7 +99,9 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event) => (
+            {events.map((event) => {
+              const tierBadge = getTierBadge(event.package);
+              return (
               <div key={event.id} className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1">
                 <div className="aspect-video w-full bg-gray-800 overflow-hidden relative">
                   {/* FIX: Pass event.category so the correct default image is chosen */}
@@ -117,8 +113,8 @@ const Dashboard = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                   
                   {/* Tier Badge (Top Left) */}
-                  <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg backdrop-blur-md border ${getTierStyle(event.package).css}`}>
-                    {getTierStyle(event.package).label}
+                  <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg backdrop-blur-md border ${tierBadge.css}`}>
+                    {tierBadge.label}
                   </div>
 
                   {/* Category Emoji (Top Right) */}
@@ -152,7 +148,8 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
