@@ -311,9 +311,13 @@ const EventDetailsPage = () => {
     };
 
     if (id) fetchData();
+  }, [id]);
 
-    // Set up Realtime Subscription for Host
-    const channelId = `host_memories_dashboard_${id}_${Math.random().toString(36).substring(7)}`;
+  useEffect(() => {
+    const currentEventId = eventData?.id;
+    if (!currentEventId) return;
+
+    const channelId = `host_memories_dashboard_${currentEventId}_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
       .channel(channelId)
       .on(
@@ -322,14 +326,15 @@ const EventDetailsPage = () => {
           event: '*',
           schema: 'public',
           table: 'memories',
+          filter: `event_id=eq.${currentEventId}`,
         },
         (payload) => {
            console.log('Host Realtime Payload:', payload);
-           // Client-side filtering to bypass strict RLS replication missing grants
-           const incomingEventId = payload.eventType === 'DELETE' 
-             ? payload.old.event_id 
+           // Keep client-side filtering as a second guard even with server-side realtime filtering.
+           const incomingEventId = payload.eventType === 'DELETE'
+             ? payload.old.event_id
              : payload.new.event_id;
-             
+
            if (String(incomingEventId) !== String(id)) return;
 
            if (payload.eventType === 'INSERT') {
@@ -352,7 +357,7 @@ const EventDetailsPage = () => {
            }
 
            if (payload.eventType === 'UPDATE') {
-              setMemories(prev => prev.map(m => String(m.id) === String(payload.new.id) ? { 
+              setMemories(prev => prev.map(m => String(m.id) === String(payload.new.id) ? {
                 ...m,
                 isApproved: payload.new.is_approved,
                 aiStory: payload.new.ai_story,
@@ -367,11 +372,10 @@ const EventDetailsPage = () => {
       )
       .subscribe();
 
-      return () => {
-          supabase.removeChannel(channel);
-      };
-
-  }, [id]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, eventData?.id]);
 
   const guestUrl = eventSlug ? `${window.location.origin}/e/${eventSlug}` : '';
 

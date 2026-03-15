@@ -108,11 +108,13 @@ export const GuestEventPage: React.FC = () => {
       }
     };
     fetchData();
+  }, [slug, isEventFull]);
 
-    if (isEventFull) return; // Prevent WebSocket connection if banned
+  useEffect(() => {
+    const currentEventId = event?.id;
+    if (isEventFull || !slug || !currentEventId) return;
 
-    // Set up Realtime Subscription
-    const channelId = `guest_memories_feed_${slug}_${Math.random().toString(36).substring(7)}`;
+    const channelId = `guest_memories_feed_${currentEventId}_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
       .channel(channelId)
       .on(
@@ -121,14 +123,15 @@ export const GuestEventPage: React.FC = () => {
           event: '*',
           schema: 'public',
           table: 'memories',
+          filter: `event_id=eq.${currentEventId}`,
         },
         (payload) => {
            console.log('Guest Realtime Payload:', payload);
-           // We only care about Approved memories for the guest feed
+           // Keep existing client-side checks even with server-side realtime filtering.
             if (payload.eventType === 'INSERT' && payload.new.is_approved) {
               setMemories(prev => {
                 if (prev.some(m => String(m.id) === String(payload.new.id))) return prev;
-                
+
                 return [
                   {
                      id: payload.new.id,
@@ -151,7 +154,7 @@ export const GuestEventPage: React.FC = () => {
                   setMemories(prev => {
                      const exists = prev.find(m => String(m.id) === String(payload.new.id));
                      if (exists) {
-                         return prev.map(m => String(m.id) === String(payload.new.id) ? { 
+                         return prev.map(m => String(m.id) === String(payload.new.id) ? {
                             ...m,
                             isApproved: true,
                             aiStory: payload.new.ai_story,
@@ -170,7 +173,7 @@ export const GuestEventPage: React.FC = () => {
                         }, ...prev];
                      }
                   });
-                  
+
                   // Also update selected memory if it's the one receiving the update (like a new like)
                   setSelectedMemory(curr => {
                      if (curr && String(curr.id) === String(payload.new.id)) {
@@ -191,12 +194,10 @@ export const GuestEventPage: React.FC = () => {
       )
       .subscribe();
 
-      // Cleanup
-      return () => {
-          supabase.removeChannel(channel);
-      };
-
-  }, [slug, isEventFull]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [event?.id, isEventFull, slug]);
 
   const handleLike = async (e: React.MouseEvent, memoryId: string) => {
       e.stopPropagation(); // Prevent opening the modal
