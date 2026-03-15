@@ -20,10 +20,20 @@ const ImageCropper = ({ imageSrc, aspectRatio = 16 / 9, onCropComplete, onCancel
   // Auto-center the crop when image loads
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
-    const size = Math.min(width, height) * 0.8;
-    const x = (width - size) / 2;
-    const y = (height - size) / 2;
-    setCrop({ unit: 'px', x, y, width: size, height: size });
+    const maxWidth = width * 0.8;
+    const maxHeight = height * 0.8;
+
+    let cropWidth = maxWidth;
+    let cropHeight = cropWidth / aspectRatio;
+
+    if (cropHeight > maxHeight) {
+      cropHeight = maxHeight;
+      cropWidth = cropHeight * aspectRatio;
+    }
+
+    const x = (width - cropWidth) / 2;
+    const y = (height - cropHeight) / 2;
+    setCrop({ unit: 'px', x, y, width: cropWidth, height: cropHeight });
   };
 
   const handleSave = async () => {
@@ -60,6 +70,7 @@ const ImageCropper = ({ imageSrc, aspectRatio = 16 / 9, onCropComplete, onCancel
           crop={crop}
           onChange={(_, percentCrop) => setCrop(percentCrop)}
           onComplete={(c) => setCompletedCrop(c)}
+          aspect={aspectRatio}
           className="max-h-full max-w-full"
         >
           <img 
