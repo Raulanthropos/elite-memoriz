@@ -45,6 +45,15 @@ class SupabaseProvider implements IStorageProvider {
   }
 }
 
+const supabaseStorageClient = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+
+export const deleteSupabaseUploadFile = async (path: string): Promise<void> => {
+  const { error } = await supabaseStorageClient.storage.from('uploads').remove([path]);
+  if (error) {
+    throw error;
+  }
+};
+
 // 3. The Factory (Switching Logic)
 export const StorageService: IStorageProvider = 
   process.env.STORAGE_PROVIDER === 'AZURE' 
