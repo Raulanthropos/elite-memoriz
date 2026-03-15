@@ -10,12 +10,12 @@ const ExitPage = () => {
         <p className="text-gray-600 leading-relaxed mb-6">
           Scan the event QR code again to re-enter.
         </p>
-        <button
+        {/* <button
           onClick={() => navigate('/')}
           className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
         >
           Return Home
-        </button>
+        </button> */}
       </div>
     </div>
   );
