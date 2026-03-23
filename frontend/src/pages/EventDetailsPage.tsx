@@ -605,6 +605,12 @@ const EventDetailsPage = () => {
                  <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-gray-900 border border-gray-800 rounded-xl">
                     <span className="text-sm font-semibold text-gray-400">Event Details:</span>
                     
+                    {/* Event Name */}
+                    <span className="font-bold text-navy-600">
+                        {eventData.title}
+                    </span>
+
+                    <span className="text-gray-600 block h-4 w-px bg-gray-700"></span>
                     {/* Tier Badge */}
                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${tierBadge.css}`}>
                         {tierBadge.label} TIER
