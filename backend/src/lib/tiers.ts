@@ -6,31 +6,35 @@ const LEGACY_TIER_ALIASES: Record<string, Tier> = {
 
 export type Tier = (typeof TIERS)[number];
 
-type TierLimits = {
+export type TierLimits = {
   maxEvents: number;
   maxGuests: number;
-  maxUploads: number;
   maxStorageBytes: number;
+  maxFileSizeBytes: number;
+  aiStoriesEnabled: boolean;
 };
 
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
   BASIC: {
     maxEvents: 1,
     maxGuests: 100,
-    maxUploads: 20,
-    maxStorageBytes: 100 * 1024 * 1024,
+    maxStorageBytes: 10 * 1024 * 1024 * 1024,
+    maxFileSizeBytes: 100 * 1024 * 1024,
+    aiStoriesEnabled: false,
   },
   PREMIUM: {
     maxEvents: Number.POSITIVE_INFINITY,
-    maxGuests: Number.POSITIVE_INFINITY,
-    maxUploads: 100,
-    maxStorageBytes: 500 * 1024 * 1024,
+    maxGuests: 300,
+    maxStorageBytes: 50 * 1024 * 1024 * 1024,
+    maxFileSizeBytes: 100 * 1024 * 1024,
+    aiStoriesEnabled: true,
   },
   LUXURY: {
     maxEvents: Number.POSITIVE_INFINITY,
-    maxGuests: Number.POSITIVE_INFINITY,
-    maxUploads: Number.POSITIVE_INFINITY,
-    maxStorageBytes: 2 * 1024 * 1024 * 1024,
+    maxGuests: 500,
+    maxStorageBytes: 100 * 1024 * 1024 * 1024,
+    maxFileSizeBytes: 300 * 1024 * 1024,
+    aiStoriesEnabled: true,
   },
 };
 

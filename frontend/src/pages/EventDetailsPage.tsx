@@ -10,7 +10,7 @@ import { getTierBannerBadge } from '../lib/tiers';
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {
   id: string; // UUID
-  type: 'photo' | 'video' | 'story';
+  type: 'photo' | 'video' | 'audio' | 'story';
   storagePath: string; 
   originalText?: string;
   aiStory?: string;
@@ -18,6 +18,42 @@ interface Memory {
   createdAt: string;
   likes: number;
 }
+
+const renderMemoryPreview = (memory: Memory, className: string) => {
+  const mediaUrl = getImageUrl(memory.storagePath);
+
+  if (memory.type === 'photo') {
+    return (
+      <img
+        src={mediaUrl}
+        alt="Memory"
+        className={className}
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = 'https://placehold.co/400x600?text=Broken+Image';
+        }}
+      />
+    );
+  }
+
+  if (memory.type === 'video') {
+    return <video src={mediaUrl} className={className} preload="metadata" muted playsInline />;
+  }
+
+  if (memory.type === 'audio') {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-gray-300 px-6 text-center">
+        <span className="text-xs uppercase tracking-[0.3em] text-gray-500">Audio Memory</span>
+        <span className="mt-3 text-sm text-gray-400">Open to listen</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gray-800 text-gray-500">
+      <span className="text-xs uppercase tracking-widest">Memory</span>
+    </div>
+  );
+};
 
 // Memory Card Component
 const MemoryCard = ({ 
@@ -38,19 +74,10 @@ const MemoryCard = ({
     <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-lg hover:border-indigo-500/50 transition-all flex flex-col h-full group">
       {/* Image Area */}
       <div className="aspect-[4/3] w-full relative bg-gray-800 overflow-hidden cursor-pointer" onClick={() => onViewStory(memory)}>
-          {memory.type === 'photo' ? (
-              <img 
-                src={getImageUrl(memory.storagePath)} // FIX: Use centralized utility
-                alt="Memory" 
-                className="w-full h-full object-cover block transition-transform duration-500 group-hover:scale-105"
-                onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://placehold.co/400x600?text=Broken+Image';
-                }}
-              />
+          {memory.type === 'audio' ? (
+            renderMemoryPreview(memory, 'w-full h-full')
           ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-800">
-                  <span className="text-xs uppercase tracking-widest">Video</span>
-              </div>
+            renderMemoryPreview(memory, 'w-full h-full object-cover block transition-transform duration-500 group-hover:scale-105')
           )}
           
           <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 items-end">
@@ -122,7 +149,25 @@ const MemoryCard = ({
 };
 
 // Story Modal Component
-const StoryModal = ({ memory, onClose }: { memory: Memory; onClose: () => void }) => {
+const StoryModal = ({
+  memory,
+  onClose,
+  onSaveStory,
+  isSavingStory,
+}: {
+  memory: Memory | null;
+  onClose: () => void;
+  onSaveStory: (memoryId: string, aiStory: string) => Promise<void>;
+  isSavingStory: boolean;
+}) => {
+  const [isEditingStory, setIsEditingStory] = useState(false);
+  const [storyDraft, setStoryDraft] = useState('');
+
+  useEffect(() => {
+    setStoryDraft(memory?.aiStory || '');
+    setIsEditingStory(false);
+  }, [memory?.id, memory?.aiStory]);
+
   if (!memory) return null;
 
   return (
@@ -136,17 +181,84 @@ const StoryModal = ({ memory, onClose }: { memory: Memory; onClose: () => void }
         </button>
 
         <div className="md:w-1/2 bg-black flex items-center justify-center bg-pattern">
-           <img 
-             src={getImageUrl(memory.storagePath)} 
-             alt="Memory" 
-             className="w-full h-full object-contain max-h-[50vh] md:max-h-full"
-           />
+          {memory.type === 'photo' && (
+            <img
+              src={getImageUrl(memory.storagePath)}
+              alt="Memory"
+              className="w-full h-full object-contain max-h-[50vh] md:max-h-full"
+            />
+          )}
+          {memory.type === 'video' && (
+            <video
+              src={getImageUrl(memory.storagePath)}
+              className="w-full h-full object-contain max-h-[50vh] md:max-h-full"
+              controls
+              playsInline
+              preload="metadata"
+            />
+          )}
+          {memory.type === 'audio' && (
+            <div className="w-full h-full min-h-[320px] flex flex-col items-center justify-center p-8 text-center text-gray-300">
+              <span className="text-xs uppercase tracking-[0.35em] text-gray-500">Audio Memory</span>
+              <audio src={getImageUrl(memory.storagePath)} controls className="w-full max-w-md mt-6" />
+            </div>
+          )}
         </div>
         
         <div className="p-8 md:w-1/2 flex flex-col bg-gray-900 overflow-y-auto">
-            <h3 className="text-2xl font-serif text-indigo-300 italic mb-6 leading-relaxed">
-              "{memory.aiStory || "No story generated yet..."}"
-            </h3>
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">AI Story</p>
+              {!isEditingStory && (
+                <button
+                  onClick={() => setIsEditingStory(true)}
+                  className="px-3 py-1.5 rounded-lg border border-indigo-500/40 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+
+            {isEditingStory ? (
+              <div className="space-y-3 mb-6">
+                <textarea
+                  value={storyDraft}
+                  onChange={(e) => setStoryDraft(e.target.value)}
+                  rows={8}
+                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500 resize-y"
+                  placeholder="Write or refine the AI story..."
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await onSaveStory(memory.id, storyDraft);
+                        setIsEditingStory(false);
+                      } catch {
+                        // saveAiStory already handles user-facing errors
+                      }
+                    }}
+                    disabled={isSavingStory}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+                  >
+                    {isSavingStory ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStoryDraft(memory.aiStory || '');
+                      setIsEditingStory(false);
+                    }}
+                    disabled={isSavingStory}
+                    className="px-4 py-2 rounded-lg border border-gray-700 text-sm font-semibold text-gray-300 hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <h3 className="text-2xl font-serif text-indigo-300 italic mb-6 leading-relaxed whitespace-pre-wrap">
+                {memory.aiStory ? `"${memory.aiStory}"` : 'No story generated yet...'}
+              </h3>
+            )}
             
             <div className="mt-auto border-t border-gray-800 pt-6 space-y-4">
                {memory.originalText && (
@@ -180,6 +292,7 @@ const EventDetailsPage = () => {
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [isAdmin, setIsAdmin] = useState(false); // NEW: Admin Check
   const [eventData, setEventData] = useState<any>(null);
+  const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
 
   // Approve Logic
   const updateStatus = async (memoryId: string, isApproved: boolean) => {
@@ -230,6 +343,55 @@ const EventDetailsPage = () => {
           console.error('Error deleting memory:', err);
           alert('Failed to reject memory.');
       }
+  };
+
+  const saveAiStory = async (memoryId: string, aiStory: string) => {
+    if (!eventSlug) {
+      alert('Event slug is missing.');
+      return;
+    }
+
+    setSavingStoryId(memoryId);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const res = await fetch(`${API_URL}/api/host/events/${eventSlug}/memories/${memoryId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ aiStory })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to update AI story');
+      }
+
+      const data = await res.json();
+      const nextAiStory = data.aiStory || '';
+
+      setMemories(prev => prev.map(memory => (
+        String(memory.id) === String(memoryId)
+          ? { ...memory, aiStory: nextAiStory }
+          : memory
+      )));
+
+      setSelectedMemory(current => (
+        current && String(current.id) === String(memoryId)
+          ? { ...current, aiStory: nextAiStory }
+          : current
+      ));
+    } catch (err: any) {
+      console.error('Error updating AI story:', err);
+      alert(err.message || 'Failed to update AI story');
+      throw err;
+    } finally {
+      setSavingStoryId(null);
+    }
   };
 
   // NEW: Force Delete Event (Admin Only)
@@ -330,12 +492,6 @@ const EventDetailsPage = () => {
         },
         (payload) => {
            console.log('Host Realtime Payload:', payload);
-           // Keep client-side filtering as a second guard even with server-side realtime filtering.
-           const incomingEventId = payload.eventType === 'DELETE'
-             ? payload.old.event_id
-             : payload.new.event_id;
-
-           if (String(incomingEventId) !== String(id)) return;
 
            if (payload.eventType === 'INSERT') {
               setMemories(prev => {
@@ -363,10 +519,24 @@ const EventDetailsPage = () => {
                 aiStory: payload.new.ai_story,
                 likes: payload.new.likes || m.likes || 0
              } : m));
+
+             setSelectedMemory(current => (
+               current && String(current.id) === String(payload.new.id)
+                 ? {
+                     ...current,
+                     isApproved: payload.new.is_approved,
+                     aiStory: payload.new.ai_story,
+                     likes: payload.new.likes || current.likes || 0
+                   }
+                 : current
+             ));
            }
 
            if (payload.eventType === 'DELETE') {
               setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
+              setSelectedMemory(current => (
+                current && String(current.id) === String(payload.old.id) ? null : current
+              ));
            }
         }
       )
@@ -375,7 +545,7 @@ const EventDetailsPage = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, eventData?.id]);
+  }, [eventData?.id]);
 
   const guestUrl = eventSlug ? `${window.location.origin}/e/${eventSlug}` : '';
 
@@ -510,7 +680,9 @@ const EventDetailsPage = () => {
       {selectedMemory && (
         <StoryModal 
           memory={selectedMemory} 
-          onClose={() => setSelectedMemory(null)} 
+          onClose={() => setSelectedMemory(null)}
+          onSaveStory={saveAiStory}
+          isSavingStory={savingStoryId === String(selectedMemory.id)}
         />
       )}
     </div>

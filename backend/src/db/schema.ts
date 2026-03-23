@@ -47,7 +47,7 @@ export const events = pgTable('events', {
 export const memories = pgTable('memories', {
   id: serial('id').primaryKey(),
   eventId: uuid('event_id').references(() => events.id),
-  type: text('type', { enum: ['photo', 'video', 'story'] }).default('photo').notNull(),
+  type: text('type', { enum: ['photo', 'video', 'audio', 'story'] }).default('photo').notNull(),
   storagePath: text('storage_path').notNull(), // The path in Azure/Supabase
   originalText: text('original_text'), // For guest's raw memory
   aiStory: text('ai_story'), // The rewritten story

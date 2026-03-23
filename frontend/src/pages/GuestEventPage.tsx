@@ -7,7 +7,7 @@ import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
 
 interface EventDetails {
-  id: number;
+  id: string;
   title: string;
   date: string;
   coverImage: string | null;
@@ -17,7 +17,7 @@ interface EventDetails {
 
 interface Memory {
   id: string; 
-  type: 'photo' | 'video' | 'story';
+  type: 'photo' | 'video' | 'audio' | 'story';
   storagePath: string;
   originalText?: string;
   aiStory?: string; 
@@ -25,6 +25,31 @@ interface Memory {
   createdAt: string; 
   likes: number;
 }
+
+const INACTIVITY_TIMEOUT_MS = 3_600_000;
+
+const renderMemoryMedia = (memory: Memory, className: string) => {
+  const mediaUrl = getImageUrl(memory.storagePath);
+
+  if (memory.type === 'photo') {
+    return <img src={mediaUrl} alt="Memory" className={className} loading="lazy" />;
+  }
+
+  if (memory.type === 'video') {
+    return <video src={mediaUrl} className={className} preload="metadata" playsInline muted />;
+  }
+
+  if (memory.type === 'audio') {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-white px-4 text-center">
+        <span className="text-[11px] uppercase tracking-[0.3em] text-gray-400">Audio Memory</span>
+        <span className="mt-3 text-sm text-gray-400">Open to listen</span>
+      </div>
+    );
+  }
+
+  return <div className="w-full h-full bg-gray-900" />;
+};
 
 export const GuestEventPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -52,6 +77,7 @@ export const GuestEventPage: React.FC = () => {
 
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inactivityTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,7 +153,7 @@ export const GuestEventPage: React.FC = () => {
         },
         (payload) => {
            console.log('Guest Realtime Payload:', payload);
-           // Keep existing client-side checks even with server-side realtime filtering.
+           // Guests should only ever receive rows for this event; keep approved-only UI behavior.
             if (payload.eventType === 'INSERT' && payload.new.is_approved) {
               setMemories(prev => {
                 if (prev.some(m => String(m.id) === String(payload.new.id))) return prev;
@@ -199,6 +225,45 @@ export const GuestEventPage: React.FC = () => {
     };
   }, [event?.id, isEventFull, slug]);
 
+  useEffect(() => {
+    if (!event || isEventFull) {
+      return;
+    }
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+
+      inactivityTimerRef.current = window.setTimeout(() => {
+        navigate('/exit');
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const inactivityEvents: Array<'touchstart' | 'mousemove' | 'keydown' | 'scroll'> = [
+      'touchstart',
+      'mousemove',
+      'keydown',
+      'scroll',
+    ];
+
+    inactivityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetInactivityTimer);
+    });
+
+    resetInactivityTimer();
+
+    return () => {
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+
+      inactivityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetInactivityTimer);
+      });
+    };
+  }, [event, isEventFull, navigate]);
+
   const handleLike = async (e: React.MouseEvent, memoryId: string) => {
       e.stopPropagation(); // Prevent opening the modal
       
@@ -229,14 +294,18 @@ export const GuestEventPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 1. Create a raw URL for the cropper to use
     const url = URL.createObjectURL(file);
-    setRawFileUrl(url);
+
+    if (file.type.startsWith('image/')) {
+      setRawFileUrl(url);
+      setIsCropping(true);
+    } else {
+      setRawFileUrl(null);
+      setPreviewUrl(url);
+      setSelectedFile(file);
+      setSuccess(false);
+    }
     
-    // 2. Open Cropper immediately
-    setIsCropping(true);
-    
-    // Reset input so same file can be picked again if cancelled
     e.target.value = '';
   };
 
@@ -313,7 +382,7 @@ export const GuestEventPage: React.FC = () => {
           </div>
           <h2 className="text-3xl font-serif font-bold text-white mb-4">Gallery Full</h2>
           <p className="text-gray-400 max-w-md">
-              This event's gallery has reached its maximum capacity of 100 guests. 
+              This event's gallery has reached its maximum guest capacity. 
               Please contact the event host to upgrade their package if you wish to participate.
           </p>
       </div>
@@ -361,7 +430,7 @@ export const GuestEventPage: React.FC = () => {
       {/* 2. Main Action Area */}
       <div className="p-6 flex flex-col items-center gap-4 bg-white border-b border-gray-100 shadow-xl mb-8 -mt-8 rounded-t-3xl relative z-10 mx-4">
         
-        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
+        <input type="file" accept="image/*,video/*,audio/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
 
         {/* DEFAULT STATE */}
         {!selectedFile && !success && (
@@ -373,7 +442,7 @@ export const GuestEventPage: React.FC = () => {
                     <Camera className="w-8 h-8 mb-1" />
                 </button>
                 <h3 className="text-lg font-bold text-gray-800 mt-4">Share a Memory</h3>
-                <p className="text-xs text-gray-400 max-w-xs mt-1">Take a photo or upload from gallery</p>
+                <p className="text-xs text-gray-400 max-w-xs mt-1">Upload a photo, video, or audio memory</p>
             </div>
         )}
 
@@ -381,7 +450,19 @@ export const GuestEventPage: React.FC = () => {
         {selectedFile && !uploading && !success && (
             <div className="w-full max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300">
                 <div className="relative w-full bg-black rounded-xl overflow-hidden shadow-md group">
-                    <img src={previewUrl!} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto"/>
+                    {selectedFile.type.startsWith('image/') && (
+                      <img src={previewUrl!} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto"/>
+                    )}
+                    {selectedFile.type.startsWith('video/') && (
+                      <video src={previewUrl!} className="w-full h-auto max-h-[400px] object-contain mx-auto" controls playsInline />
+                    )}
+                    {selectedFile.type.startsWith('audio/') && (
+                      <div className="min-h-[220px] flex flex-col items-center justify-center px-6 py-10 text-white text-center">
+                        <span className="text-xs uppercase tracking-[0.3em] text-gray-400">Audio Preview</span>
+                        <p className="mt-3 text-sm text-gray-300 break-all">{selectedFile.name}</p>
+                        <audio src={previewUrl!} controls className="w-full mt-6" />
+                      </div>
+                    )}
                     <button onClick={cancelPreview} className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-red-500/80 transition-colors">
                         <X size={20} />
                     </button>
@@ -420,7 +501,7 @@ export const GuestEventPage: React.FC = () => {
             <div className="w-20 h-20 rounded-full bg-green-50 border-4 border-green-100 flex items-center justify-center text-green-600 mb-4">
                 <CheckCircle2 className="w-10 h-10" />
             </div>
-            <h3 className="text-xl font-bold text-gray-800">Photo Sent!</h3>
+            <h3 className="text-xl font-bold text-gray-800">Memory Sent!</h3>
             <p className="text-gray-500 text-sm mb-6">It will appear once approved.</p>
             <button 
                 onClick={() => { setSuccess(false); setSelectedFile(null); setPreviewUrl(null); setCaption(''); }}
@@ -452,7 +533,9 @@ export const GuestEventPage: React.FC = () => {
                         className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm cursor-pointer group"
                         onClick={() => setSelectedMemory(memory)}
                     >
-                        <img src={getImageUrl(memory.storagePath)} alt="Memory" className="w-full h-full object-cover" loading="lazy"/>
+                        {memory.type === 'audio'
+                          ? renderMemoryMedia(memory, 'w-full h-full')
+                          : renderMemoryMedia(memory, 'w-full h-full object-cover')}
                         
                         {/* Like Overlay */}
                         <div className="absolute bottom-2 right-2 z-10">
@@ -485,7 +568,24 @@ export const GuestEventPage: React.FC = () => {
                   {/* Left Side: Image */}
                   <div className="w-full md:w-1/2 flex-shrink-0 flex items-center justify-center">
                       <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-gray-800">
-                          <img src={getImageUrl(selectedMemory.storagePath)} className="w-full h-auto max-h-[70vh] object-contain bg-gray-900" alt="Memory" />
+                          {selectedMemory.type === 'photo' && (
+                            <img src={getImageUrl(selectedMemory.storagePath)} className="w-full h-auto max-h-[70vh] object-contain bg-gray-900" alt="Memory" />
+                          )}
+                          {selectedMemory.type === 'video' && (
+                            <video
+                              src={getImageUrl(selectedMemory.storagePath)}
+                              className="w-full h-auto max-h-[70vh] object-contain bg-gray-900"
+                              controls
+                              playsInline
+                              preload="metadata"
+                            />
+                          )}
+                          {selectedMemory.type === 'audio' && (
+                            <div className="w-full min-h-[320px] flex flex-col items-center justify-center px-6 py-10 bg-gray-900 text-white text-center">
+                              <span className="text-xs uppercase tracking-[0.3em] text-gray-500">Audio Memory</span>
+                              <audio src={getImageUrl(selectedMemory.storagePath)} controls className="w-full mt-6" />
+                            </div>
+                          )}
                           <div className="absolute bottom-4 right-4 z-10">
                               <button 
                                   onClick={(e) => handleLike(e, selectedMemory.id)}

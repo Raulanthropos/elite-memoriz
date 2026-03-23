@@ -7,6 +7,7 @@ import { deleteSupabaseUploadFile, StorageService } from '../services/storage';
 import { TIER_LIMITS, parseTier } from '../lib/tiers';
 
 const router = Router();
+const MAX_AI_STORY_LENGTH = 5_000;
 
 const isManagedUploadPath = (value: string | null | undefined): value is string => {
   return Boolean(value && !value.startsWith('http'));
@@ -332,6 +333,58 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Success', isApproved });
   } catch (error) {
     console.error('Error updating memory:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// PATCH /events/:slug/memories/:id - Update a memory AI story
+router.patch('/events/:slug/memories/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const slug = typeof req.params.slug === 'string' ? req.params.slug.trim() : '';
+    const memoryId = Number.parseInt(req.params.id, 10);
+    const aiStory = typeof req.body?.aiStory === 'string' ? req.body.aiStory.trim() : null;
+
+    if (!slug || Number.isNaN(memoryId) || memoryId <= 0 || aiStory == null) {
+      return res.status(400).json({ message: 'Invalid input' });
+    }
+
+    const profile = await db.query.profiles.findFirst({
+      where: eq(schema.profiles.id, userId)
+    });
+
+    const event = await db.query.events.findFirst({
+      where: eq(schema.events.slug, slug)
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (event.userId !== userId && profile?.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    const memory = await db.query.memories.findFirst({
+      where: and(
+        eq(schema.memories.id, memoryId),
+        eq(schema.memories.eventId, event.id)
+      )
+    });
+
+    if (!memory) {
+      return res.status(404).json({ message: 'Memory not found' });
+    }
+
+    const nextAiStory = aiStory.slice(0, MAX_AI_STORY_LENGTH) || null;
+
+    await db.update(schema.memories)
+      .set({ aiStory: nextAiStory })
+      .where(eq(schema.memories.id, memoryId));
+
+    res.json({ message: 'AI story updated', aiStory: nextAiStory, memoryId });
+  } catch (error) {
+    console.error('Error updating AI story:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

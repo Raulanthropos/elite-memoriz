@@ -6,47 +6,129 @@ import { events, memories, eventGuests } from '../db/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import { StorageService } from '../services/storage';
 import { AIService } from '../services/ai';
-import { TIER_LIMITS, parseTier } from '../lib/tiers';
+import { TIER_LIMITS, Tier, TierLimits, parseTier } from '../lib/tiers';
 
 const router = Router();
-const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
 const MAX_MEMORY_TEXT_LENGTH = 1_000;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ALLOWED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
 
-const upload = multer({
-  dest: 'uploads/',
-  limits: {
-    fileSize: MAX_UPLOAD_SIZE_BYTES,
-  },
-  fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-      cb(new Error('Only image uploads are allowed'));
+type UploadRouteLocals = {
+  uploadEvent?: typeof events.$inferSelect;
+  uploadTier?: Tier;
+  uploadLimits?: TierLimits;
+};
+
+const formatUploadLimitLabel = (bytes: number) => `${Math.round(bytes / (1024 * 1024))}MB`;
+
+const isAllowedUploadMimeType = (mimeType: string) =>
+  ALLOWED_UPLOAD_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
+
+const getMemoryTypeFromMimeType = (mimeType: string): 'photo' | 'video' | 'audio' | null => {
+  if (mimeType.startsWith('image/')) {
+    return 'photo';
+  }
+
+  if (mimeType.startsWith('video/')) {
+    return 'video';
+  }
+
+  if (mimeType.startsWith('audio/')) {
+    return 'audio';
+  }
+
+  return null;
+};
+
+const uploadSingleMemory = async (
+  req: Request,
+  res: Response<unknown, UploadRouteLocals>,
+  next: (error?: unknown) => void
+) => {
+  try {
+    const slug = getSlugOrRespond(req, res);
+    if (!slug) {
       return;
     }
 
-    cb(null, true);
-  },
-}); // Clean, simple temp storage
+    const event = await db.query.events.findFirst({
+      where: eq(events.slug, slug),
+    });
 
-const uploadSinglePhoto = (req: Request, res: Response, next: (error?: unknown) => void) => {
-  upload.single('photo')(req, res, (error) => {
-    if (!error) {
-      next();
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
       return;
     }
 
-    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      res.status(400).json({ message: 'Photo exceeds 15MB upload limit' });
+    if (isEventExpired(event)) {
+      res.status(403).json({ message: 'This event has expired. No new memories can be added.' });
       return;
     }
 
-    if (error instanceof Error) {
-      res.status(400).json({ message: error.message });
+    const tier = parseTier(event.package);
+    if (!tier) {
+      res.status(500).json({ message: 'Event has invalid tier configuration' });
       return;
     }
 
-    res.status(400).json({ message: 'Invalid upload request' });
-  });
+    const limits = TIER_LIMITS[tier];
+    const upload = multer({
+      dest: 'uploads/',
+      limits: {
+        fileSize: limits.maxFileSizeBytes,
+      },
+      fileFilter: (_uploadReq, file, cb) => {
+        if (!isAllowedUploadMimeType(file.mimetype)) {
+          cb(new Error('Only image, video, and audio uploads are allowed'));
+          return;
+        }
+
+        cb(null, true);
+      },
+    });
+
+    res.locals.uploadEvent = event;
+    res.locals.uploadTier = tier;
+    res.locals.uploadLimits = limits;
+
+    upload.single('photo')(req, res, (error) => {
+      if (!error) {
+        next();
+        return;
+      }
+
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        res
+          .status(400)
+          .json({ message: `File exceeds ${formatUploadLimitLabel(limits.maxFileSizeBytes)} upload limit` });
+        return;
+      }
+
+      if (error instanceof Error) {
+        res.status(400).json({ message: error.message });
+        return;
+      }
+
+      res.status(400).json({ message: 'Invalid upload request' });
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getCurrentEventStorageUsage = async (eventId: string) => {
+  const [storageResult] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${memories.fileSize}), 0)`,
+    })
+    .from(memories)
+    .where(eq(memories.eventId, eventId));
+
+  return Number(storageResult?.totalBytes ?? 0);
+};
+
+const uploadSinglePhoto = (req: Request, res: Response<unknown, UploadRouteLocals>, next: (error?: unknown) => void) => {
+  uploadSingleMemory(req, res, next);
 };
 
 const getSlugOrRespond = (req: Request, res: Response): string | null => {
@@ -178,7 +260,7 @@ router.get('/:slug/memories', async (req: Request, res: Response) => {
 });
 
 // POST /:slug/upload - Guest upload
-router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Response) => {
+router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Response<unknown, UploadRouteLocals>) => {
   try {
     const slug = getSlugOrRespond(req, res);
     if (!slug) {
@@ -193,50 +275,25 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({ message: 'No photo uploaded' });
+      return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // 1. Fetch Event & Current Stats
-    const event = await db.query.events.findFirst({
-      where: eq(events.slug, slug),
-      with: {
-        memories: true, 
-      }
-    });
+    const event = res.locals.uploadEvent;
+    const tier = res.locals.uploadTier;
+    const limits = res.locals.uploadLimits;
 
-    if (!event) {
-      // Cleanup file if event not found
+    if (!event || !tier || !limits) {
       cleanupTempUpload(file);
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(500).json({ message: 'Upload context was not initialized' });
     }
 
-    // Check Expiration
-    if (isEventExpired(event)) {
+    const memoryType = getMemoryTypeFromMimeType(file.mimetype);
+    if (!memoryType) {
       cleanupTempUpload(file);
-      return res.status(403).json({ message: 'This event has expired. No new memories can be added.' });
+      return res.status(400).json({ message: 'Unsupported file type' });
     }
 
-    // 2. Check Tier Limits
-    const uploadCountResult = await db.select({ count: sql<number>`count(*)` })
-      .from(memories)
-      .where(eq(memories.eventId, event.id));
-    const currentUploadCount = Number(uploadCountResult[0].count);
-    const currentStorageUsed = event.storageUsed || 0;
-
-    const tier = parseTier(event.package);
-    if (!tier) {
-      cleanupTempUpload(file);
-      return res.status(500).json({ message: 'Event has invalid tier configuration' });
-    }
-
-    const limits = TIER_LIMITS[tier];
-
-    console.log(`Uploading to Tier: ${tier}`); // Debug log
-
-    if (currentUploadCount >= limits.maxUploads) {
-      cleanupTempUpload(file);
-      return res.status(403).json({ message: `Upload limit reached for ${event.package} tier.` });
-    }
+    const currentStorageUsed = await getCurrentEventStorageUsage(event.id);
 
     if (currentStorageUsed + file.size > limits.maxStorageBytes) {
       cleanupTempUpload(file);
@@ -254,14 +311,17 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     const publicUrl = await StorageService.uploadFile(file, storagePath);
 
     // 4. AI Processing
-    const aiStory = await AIService.rewriteMemory(cleanOriginal, file.buffer, file.mimetype);
+    const shouldGenerateAiStory = limits.aiStoriesEnabled && memoryType === 'photo';
+    const aiStory = shouldGenerateAiStory
+      ? await AIService.rewriteMemory(cleanOriginal, file.buffer, file.mimetype)
+      : null;
 
     // 5. Save to DB
     await db.transaction(async (tx) => {
       // Insert memory
       await tx.insert(memories).values({
         eventId: event.id,
-        type: 'photo',
+        type: memoryType,
         storagePath: storagePath, 
         originalText: cleanOriginal,
         aiStory: aiStory,
@@ -280,7 +340,9 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
 
     res.status(201).json({ 
       message: 'Memory captured successfully!', 
-      story: aiStory 
+      story: aiStory,
+      mediaType: memoryType,
+      storagePath: publicUrl,
     });
 
   } catch (error) {
