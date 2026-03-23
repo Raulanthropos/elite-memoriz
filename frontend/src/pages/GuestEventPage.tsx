@@ -13,6 +13,7 @@ interface EventDetails {
   coverImage: string | null;
   category: string; 
   welcomeMessage: string | null;
+  package: string;
 }
 
 interface Memory {
@@ -474,12 +475,14 @@ export const GuestEventPage: React.FC = () => {
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                         placeholder="Your Name"
                     />
-                    <textarea 
-                        value={caption} onChange={(e) => setCaption(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none"
-                        placeholder="Add a caption..."
-                        rows={2}
-                    />
+                    {event.package !== 'BASIC' && (
+                      <textarea 
+                          value={caption} onChange={(e) => setCaption(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                          placeholder="Add a caption..."
+                          rows={2}
+                      />
+                    )}
                 </div>
                 <button onClick={handleUpload} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
                     <Send size={18} /> Send Memory

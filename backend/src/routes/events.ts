@@ -219,6 +219,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       coverImage: event.coverImage,
       date: event.date,
       spotifyUrl: event.spotifyUrl,
+      package: event.package,
     });
   } catch (error) {
     console.error('Error fetching event:', error);
@@ -348,6 +349,7 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
   } catch (error) {
     console.error('Upload handler error:', error);
     cleanupTempUpload(req.file);
+    console.error('[UPLOAD ERROR]:', error);
 
     res.status(500).json({ message: 'Internal server error while uploading memory' });
   }

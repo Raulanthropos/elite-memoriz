@@ -151,17 +151,20 @@ const MemoryCard = ({
 // Story Modal Component
 const StoryModal = ({
   memory,
+  eventPackage,
   onClose,
   onSaveStory,
   isSavingStory,
 }: {
   memory: Memory | null;
+  eventPackage: string;
   onClose: () => void;
   onSaveStory: (memoryId: string, aiStory: string) => Promise<void>;
   isSavingStory: boolean;
 }) => {
   const [isEditingStory, setIsEditingStory] = useState(false);
   const [storyDraft, setStoryDraft] = useState('');
+  const shouldShowAiStorySection = eventPackage !== 'BASIC' && memory?.type === 'photo';
 
   useEffect(() => {
     setStoryDraft(memory?.aiStory || '');
@@ -206,61 +209,65 @@ const StoryModal = ({
         </div>
         
         <div className="p-8 md:w-1/2 flex flex-col bg-gray-900 overflow-y-auto">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">AI Story</p>
-              {!isEditingStory && (
-                <button
-                  onClick={() => setIsEditingStory(true)}
-                  className="px-3 py-1.5 rounded-lg border border-indigo-500/40 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/10 transition-colors"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-
-            {isEditingStory ? (
-              <div className="space-y-3 mb-6">
-                <textarea
-                  value={storyDraft}
-                  onChange={(e) => setStoryDraft(e.target.value)}
-                  rows={8}
-                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500 resize-y"
-                  placeholder="Write or refine the AI story..."
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await onSaveStory(memory.id, storyDraft);
-                        setIsEditingStory(false);
-                      } catch {
-                        // saveAiStory already handles user-facing errors
-                      }
-                    }}
-                    disabled={isSavingStory}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
-                  >
-                    {isSavingStory ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStoryDraft(memory.aiStory || '');
-                      setIsEditingStory(false);
-                    }}
-                    disabled={isSavingStory}
-                    className="px-4 py-2 rounded-lg border border-gray-700 text-sm font-semibold text-gray-300 hover:bg-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
+            {shouldShowAiStorySection && (
+              <>
+                <div className="flex items-start justify-between gap-4 mb-6">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">AI Story</p>
+                  {!isEditingStory && (
+                    <button
+                      onClick={() => setIsEditingStory(true)}
+                      className="px-3 py-1.5 rounded-lg border border-indigo-500/40 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
-              </div>
-            ) : (
-              <h3 className="text-2xl font-serif text-indigo-300 italic mb-6 leading-relaxed whitespace-pre-wrap">
-                {memory.aiStory ? `"${memory.aiStory}"` : 'No story generated yet...'}
-              </h3>
+
+                {isEditingStory ? (
+                  <div className="space-y-3 mb-6">
+                    <textarea
+                      value={storyDraft}
+                      onChange={(e) => setStoryDraft(e.target.value)}
+                      rows={8}
+                      className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500 resize-y"
+                      placeholder="Write or refine the AI story..."
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await onSaveStory(memory.id, storyDraft);
+                            setIsEditingStory(false);
+                          } catch {
+                            // saveAiStory already handles user-facing errors
+                          }
+                        }}
+                        disabled={isSavingStory}
+                        className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+                      >
+                        {isSavingStory ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setStoryDraft(memory.aiStory || '');
+                          setIsEditingStory(false);
+                        }}
+                        disabled={isSavingStory}
+                        className="px-4 py-2 rounded-lg border border-gray-700 text-sm font-semibold text-gray-300 hover:bg-gray-800 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-serif text-indigo-300 italic mb-6 leading-relaxed whitespace-pre-wrap">
+                    {memory.aiStory ? `"${memory.aiStory}"` : 'No story generated yet...'}
+                  </h3>
+                )}
+              </>
             )}
-            
-            <div className="mt-auto border-t border-gray-800 pt-6 space-y-4">
+
+            <div className={`${shouldShowAiStorySection ? 'mt-auto' : 'mt-0'} border-t border-gray-800 pt-6 space-y-4`}>
                {memory.originalText && (
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 font-bold">Guest Caption</p>
@@ -680,6 +687,7 @@ const EventDetailsPage = () => {
       {selectedMemory && (
         <StoryModal 
           memory={selectedMemory} 
+          eventPackage={eventData?.package || 'BASIC'}
           onClose={() => setSelectedMemory(null)}
           onSaveStory={saveAiStory}
           isSavingStory={savingStoryId === String(selectedMemory.id)}
