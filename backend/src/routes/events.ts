@@ -351,7 +351,7 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     cleanupTempUpload(req.file);
     console.error('[UPLOAD ERROR]:', error);
 
-    res.status(500).json({ message: 'Internal server error while uploading memory' });
+    res.status(500).json({ message: 'Upload crashed: ' + (error instanceof Error ? error.message : String(error)) });
   }
 });
 
