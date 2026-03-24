@@ -1,8 +1,4 @@
 export const TIERS = ['BASIC', 'PREMIUM', 'LUXURY'] as const;
-const LEGACY_TIER_ALIASES: Record<string, Tier> = {
-  FREE: 'BASIC',
-  VIP: 'LUXURY',
-};
 
 export type Tier = (typeof TIERS)[number];
 
@@ -18,11 +14,6 @@ export const parseTier = (value: unknown): Tier | null => {
   const normalized = value.trim().toUpperCase();
   if (!normalized) {
     return 'BASIC';
-  }
-
-  const legacyAlias = LEGACY_TIER_ALIASES[normalized];
-  if (legacyAlias) {
-    return legacyAlias;
   }
 
   return TIERS.find((tier) => tier === normalized) ?? null;

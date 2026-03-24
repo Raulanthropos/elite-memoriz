@@ -83,20 +83,6 @@ const MemoryCard = ({
   const actionGridClass =
     actionCount === 1 ? 'grid-cols-1' : actionCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
 
-  useEffect(() => {
-    if (isPhotoMemory) {
-      console.log('[HOST 360 DEBUG]', {
-        memoryId: memory.id,
-        eventPackage,
-        normalizedEventPackage,
-        memoryType: memory.type,
-        normalizedMemoryType,
-        canToggle360View,
-        is360ViewEnabled: memory.is360ViewEnabled,
-      });
-    }
-  }, [canToggle360View, eventPackage, isPhotoMemory, memory.id, memory.is360ViewEnabled, memory.type, normalizedEventPackage, normalizedMemoryType]);
-
   return (
     <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-lg hover:border-indigo-500/50 transition-all flex flex-col h-full group">
       {/* Image Area */}

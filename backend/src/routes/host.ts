@@ -53,7 +53,10 @@ router.get('/profile', async (req: AuthRequest, res: Response) => {
         where: eq(schema.profiles.id, userId)
     });
     if (!profile) return res.status(404).json({ message: 'Profile not found' });
-    res.json(profile);
+    res.json({
+      ...profile,
+      tier: parseTier(profile.tier) ?? 'BASIC',
+    });
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -109,7 +112,12 @@ router.get('/events', async (req: AuthRequest, res: Response) => {
       durationMs: Date.now() - startedAt,
     });
 
-    res.json(userEvents);
+    res.json(
+      userEvents.map((event) => ({
+        ...event,
+        package: parseTier(event.package) ?? 'BASIC',
+      }))
+    );
   } catch (error) {
     console.error('Error fetching host events:', error);
     console.error(`[HOST_EVENTS_TRACE ${req.requestTraceId ?? 'unknown'}] route:exception`, error);

@@ -219,7 +219,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       coverImage: event.coverImage,
       date: event.date,
       spotifyUrl: event.spotifyUrl,
-      package: event.package,
+      package: parseTier(event.package) ?? 'BASIC',
     });
   } catch (error) {
     console.error('Error fetching event:', error);
