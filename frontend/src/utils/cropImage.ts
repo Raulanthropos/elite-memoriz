@@ -10,14 +10,34 @@ export function getRadianAngle(degreeValue: number) {
   return (degreeValue * Math.PI) / 180
 }
 
+type CropImageOptions = {
+  preserveOriginal?: boolean
+  skipCrop?: boolean
+}
+
+const getOriginalBlob = async (imageSrc: string): Promise<Blob> => {
+  const response = await fetch(imageSrc)
+
+  if (!response.ok) {
+    throw new Error(`Failed to load original image blob: ${response.status}`)
+  }
+
+  return response.blob()
+}
+
 /**
  * Check if the browser supports canvas.toBlob
  */
 export async function getCroppedImg(
   imageSrc: string,
   pixelCrop: { x: number; y: number; width: number; height: number },
-  rotation = 0
+  rotation = 0,
+  options: CropImageOptions = {}
 ): Promise<Blob | null> {
+  if (options.preserveOriginal || options.skipCrop) {
+    return getOriginalBlob(imageSrc)
+  }
+
   const image = await createImage(imageSrc)
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')

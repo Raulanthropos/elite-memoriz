@@ -6,6 +6,7 @@ import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
 import { PanoramaViewerModal } from '../components/PanoramaViewerModal';
+import { getCroppedImg } from '../utils/cropImage';
 
 interface EventDetails {
   id: string;
@@ -63,7 +64,9 @@ export const GuestEventPage: React.FC = () => {
   
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pendingImagePreviewUrl, setPendingImagePreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   
@@ -344,9 +347,16 @@ export const GuestEventPage: React.FC = () => {
     const url = URL.createObjectURL(file);
 
     if (file.type.startsWith('image/')) {
+      setPendingImageFile(file);
+      setPendingImagePreviewUrl(url);
       setRawFileUrl(url);
-      setIsCropping(true);
+      setPreviewUrl(null);
+      setSelectedFile(null);
+      setIsCropping(false);
+      setSuccess(false);
     } else {
+      setPendingImageFile(null);
+      setPendingImagePreviewUrl(null);
       setRawFileUrl(null);
       setPreviewUrl(url);
       setSelectedFile(file);
@@ -357,17 +367,60 @@ export const GuestEventPage: React.FC = () => {
   };
 
   const onCropComplete = (croppedBlob: Blob) => {
-    // 3. Convert Result back to File
-    const file = new File([croppedBlob], "memory.jpg", { type: "image/jpeg" });
+    const originalName = pendingImageFile?.name || 'memory.jpg';
+    const nextFileName = originalName.replace(/\.[^.]+$/, '') + '.jpg';
+    const file = new File([croppedBlob], nextFileName, { type: croppedBlob.type || 'image/jpeg' });
     
-    // 4. Set Final State for Upload
     const url = URL.createObjectURL(croppedBlob);
     setPreviewUrl(url);
     setSelectedFile(file);
+    setPendingImageFile(null);
+    setPendingImagePreviewUrl(null);
+    setRawFileUrl(null);
     
-    // 5. Close Cropper
     setIsCropping(false);
     setSuccess(false);
+  };
+
+  const useOriginalImage = async () => {
+    if (!pendingImageFile || !pendingImagePreviewUrl) {
+      return;
+    }
+
+    try {
+      const preservedBlob = await getCroppedImg(
+        pendingImagePreviewUrl,
+        { x: 0, y: 0, width: 1, height: 1 },
+        0,
+        { skipCrop: true }
+      );
+
+      if (!preservedBlob) {
+        throw new Error('Failed to preserve original image');
+      }
+
+      const file = new File([preservedBlob], pendingImageFile.name, {
+        type: preservedBlob.type || pendingImageFile.type,
+      });
+
+      setSelectedFile(file);
+      setPreviewUrl(pendingImagePreviewUrl);
+      setPendingImageFile(null);
+      setPendingImagePreviewUrl(null);
+      setRawFileUrl(null);
+      setSuccess(false);
+    } catch (error) {
+      console.error('Failed to use original image:', error);
+      alert('Failed to prepare the original image.');
+    }
+  };
+
+  const startCropping = () => {
+    if (!pendingImageFile || !rawFileUrl) {
+      return;
+    }
+
+    setIsCropping(true);
   };
 
   const handleUpload = async () => {
@@ -407,8 +460,11 @@ export const GuestEventPage: React.FC = () => {
   };
 
   const cancelPreview = () => {
+      setIsCropping(false);
       setSelectedFile(null);
+      setPendingImageFile(null);
       setPreviewUrl(null);
+      setPendingImagePreviewUrl(null);
       setRawFileUrl(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -443,6 +499,10 @@ export const GuestEventPage: React.FC = () => {
       </div>
     );
   }
+
+  const activePreviewFile = selectedFile || pendingImageFile;
+  const activePreviewUrl = previewUrl || pendingImagePreviewUrl;
+  const isAwaitingImageChoice = Boolean(pendingImageFile && !selectedFile);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
@@ -480,7 +540,7 @@ export const GuestEventPage: React.FC = () => {
         <input type="file" accept="image/*,video/*,audio/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
 
         {/* DEFAULT STATE */}
-        {!selectedFile && !success && (
+        {!activePreviewFile && !success && (
             <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-300 py-4">
                 <button 
                     onClick={triggerPicker}
@@ -494,26 +554,44 @@ export const GuestEventPage: React.FC = () => {
         )}
 
         {/* PREVIEW MODE (Post-Crop) */}
-        {selectedFile && !uploading && !success && (
+        {activePreviewFile && !uploading && !success && (
             <div className="w-full max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300">
                 <div className="relative w-full bg-black rounded-xl overflow-hidden shadow-md group">
-                    {selectedFile.type.startsWith('image/') && (
-                      <img src={previewUrl!} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto"/>
+                    {activePreviewFile.type.startsWith('image/') && (
+                      <img src={activePreviewUrl!} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto"/>
                     )}
-                    {selectedFile.type.startsWith('video/') && (
-                      <video src={previewUrl!} className="w-full h-auto max-h-[400px] object-contain mx-auto" controls playsInline />
+                    {activePreviewFile.type.startsWith('video/') && (
+                      <video src={activePreviewUrl!} className="w-full h-auto max-h-[400px] object-contain mx-auto" controls playsInline />
                     )}
-                    {selectedFile.type.startsWith('audio/') && (
+                    {activePreviewFile.type.startsWith('audio/') && (
                       <div className="min-h-[220px] flex flex-col items-center justify-center px-6 py-10 text-white text-center">
                         <span className="text-xs uppercase tracking-[0.3em] text-gray-400">Audio Preview</span>
-                        <p className="mt-3 text-sm text-gray-300 break-all">{selectedFile.name}</p>
-                        <audio src={previewUrl!} controls className="w-full mt-6" />
+                        <p className="mt-3 text-sm text-gray-300 break-all">{activePreviewFile.name}</p>
+                        <audio src={activePreviewUrl!} controls className="w-full mt-6" />
                       </div>
                     )}
                     <button onClick={cancelPreview} className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-red-500/80 transition-colors">
                         <X size={20} />
                     </button>
                 </div>
+
+                {isAwaitingImageChoice && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={useOriginalImage}
+                      className="py-3 px-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100 transition-colors"
+                    >
+                      Use original
+                    </button>
+                    <button
+                      onClick={startCropping}
+                      className="py-3 px-4 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100 transition-colors"
+                    >
+                      Crop image
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                     <input 
                         type="text" 
@@ -522,7 +600,7 @@ export const GuestEventPage: React.FC = () => {
                         placeholder="Your Name"
                     />
                     {event.package !== 'BASIC' && (
-                      <textarea 
+                        <textarea 
                           value={caption} onChange={(e) => setCaption(e.target.value)}
                           className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none"
                           placeholder="Add a caption..."
@@ -530,9 +608,11 @@ export const GuestEventPage: React.FC = () => {
                       />
                     )}
                 </div>
-                <button onClick={handleUpload} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Send size={18} /> Send Memory
-                </button>
+                {!isAwaitingImageChoice && (
+                  <button onClick={handleUpload} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                      <Send size={18} /> Send Memory
+                  </button>
+                )}
             </div>
         )}
 
@@ -553,7 +633,7 @@ export const GuestEventPage: React.FC = () => {
             <h3 className="text-xl font-bold text-gray-800">Memory Sent!</h3>
             <p className="text-gray-500 text-sm mb-6">It will appear once approved.</p>
             <button 
-                onClick={() => { setSuccess(false); setSelectedFile(null); setPreviewUrl(null); setCaption(''); }}
+                onClick={() => { setSuccess(false); setSelectedFile(null); setPendingImageFile(null); setPreviewUrl(null); setPendingImagePreviewUrl(null); setRawFileUrl(null); setCaption(''); }}
                 className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl shadow-md transition-colors"
             >
                 Upload Another
@@ -698,11 +778,7 @@ export const GuestEventPage: React.FC = () => {
           <ImageCropper 
             imageSrc={rawFileUrl}
             onCropComplete={onCropComplete}
-            onCancel={() => {
-                setIsCropping(false);
-                setRawFileUrl(null);
-                if(fileInputRef.current) fileInputRef.current.value = '';
-            }}
+            onCancel={cancelPreview}
           />
       )}
     </div>
