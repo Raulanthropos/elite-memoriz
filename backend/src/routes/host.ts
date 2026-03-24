@@ -290,9 +290,12 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Host's Supabase UUID
     const memoryId = parseInt(req.params.id);
-    const { isApproved } = req.body;
+    const { isApproved, is360ViewEnabled } = req.body;
 
-    if (isNaN(memoryId) || typeof isApproved !== 'boolean') {
+    if (
+      isNaN(memoryId)
+      || (typeof isApproved !== 'boolean' && typeof is360ViewEnabled !== 'boolean')
+    ) {
       return res.status(400).json({ message: 'Invalid input' });
     }
 
@@ -325,12 +328,32 @@ router.patch('/memories/:id', async (req: AuthRequest, res: Response) => {
          return res.status(404).json({ message: 'Event not found' });
     }
 
+    const updates: Partial<typeof schema.memories.$inferInsert> = {};
+
+    if (typeof isApproved === 'boolean') {
+      updates.isApproved = isApproved;
+    }
+
+    if (typeof is360ViewEnabled === 'boolean') {
+      const eventTier = parseTier(associatedEvent.package);
+
+      if (eventTier !== 'LUXURY') {
+        return res.status(403).json({ message: '360 view is only available for luxury-tier events.' });
+      }
+
+      if (memory.type !== 'photo') {
+        return res.status(400).json({ message: '360 view can only be enabled for image uploads.' });
+      }
+
+      updates.is360ViewEnabled = is360ViewEnabled;
+    }
+
     // 2. Update status
     await db.update(schema.memories)
-      .set({ isApproved })
+      .set(updates)
       .where(eq(schema.memories.id, memoryId));
 
-    res.json({ message: 'Success', isApproved });
+    res.json({ message: 'Success', ...updates });
   } catch (error) {
     console.error('Error updating memory:', error);
     res.status(500).json({ message: 'Internal server error' });

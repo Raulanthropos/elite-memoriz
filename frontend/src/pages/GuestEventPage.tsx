@@ -5,6 +5,7 @@ import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, LogOut, Hea
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
+import { PanoramaViewerModal } from '../components/PanoramaViewerModal';
 
 interface EventDetails {
   id: string;
@@ -22,6 +23,7 @@ interface Memory {
   storagePath: string;
   originalText?: string;
   aiStory?: string; 
+  is360ViewEnabled: boolean;
   isApproved: boolean; 
   createdAt: string; 
   likes: number;
@@ -75,6 +77,7 @@ export const GuestEventPage: React.FC = () => {
   
   // Story Modal State
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [panoramaMemory, setPanoramaMemory] = useState<Memory | null>(null);
 
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +169,7 @@ export const GuestEventPage: React.FC = () => {
                      storagePath: payload.new.storage_path,
                      originalText: payload.new.original_text,
                      aiStory: payload.new.ai_story,
+                     is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                      isApproved: payload.new.is_approved,
                      createdAt: payload.new.created_at,
                      likes: payload.new.likes || 0
@@ -185,6 +189,7 @@ export const GuestEventPage: React.FC = () => {
                             ...m,
                             isApproved: true,
                             aiStory: payload.new.ai_story,
+                            is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                             likes: payload.new.likes || m.likes || 0
                          } : m);
                      } else {
@@ -194,6 +199,7 @@ export const GuestEventPage: React.FC = () => {
                            storagePath: payload.new.storage_path,
                            originalText: payload.new.original_text,
                            aiStory: payload.new.ai_story,
+                           is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                            isApproved: payload.new.is_approved,
                            createdAt: payload.new.created_at,
                            likes: payload.new.likes || 0
@@ -204,18 +210,47 @@ export const GuestEventPage: React.FC = () => {
                   // Also update selected memory if it's the one receiving the update (like a new like)
                   setSelectedMemory(curr => {
                      if (curr && String(curr.id) === String(payload.new.id)) {
-                         return { ...curr, likes: payload.new.likes || curr.likes || 0 };
+                         return {
+                           ...curr,
+                           aiStory: payload.new.ai_story,
+                           is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
+                           likes: payload.new.likes || curr.likes || 0
+                         };
+                     }
+                     return curr;
+                  });
+
+                  setPanoramaMemory(curr => {
+                     if (curr && String(curr.id) === String(payload.new.id)) {
+                         return {
+                           ...curr,
+                           aiStory: payload.new.ai_story,
+                           is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
+                           likes: payload.new.likes || curr.likes || 0
+                         };
                      }
                      return curr;
                   });
               } else {
                  // If it was unapproved/rejected, remove it from feed
                  setMemories(prev => prev.filter(m => String(m.id) !== String(payload.new.id)));
+                 setSelectedMemory(curr => (
+                   curr && String(curr.id) === String(payload.new.id) ? null : curr
+                 ));
+                 setPanoramaMemory(curr => (
+                   curr && String(curr.id) === String(payload.new.id) ? null : curr
+                 ));
               }
            }
 
            if (payload.eventType === 'DELETE') {
               setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
+              setSelectedMemory(curr => (
+                curr && String(curr.id) === String(payload.old.id) ? null : curr
+              ));
+              setPanoramaMemory(curr => (
+                curr && String(curr.id) === String(payload.old.id) ? null : curr
+              ));
            }
         }
       )
@@ -289,6 +324,17 @@ export const GuestEventPage: React.FC = () => {
       } catch (err) {
           console.error('Failed to like memory', err);
       }
+  };
+
+  const openMemory = (memory: Memory) => {
+    if (memory.type === 'photo' && memory.is360ViewEnabled) {
+      setSelectedMemory(null);
+      setPanoramaMemory(memory);
+      return;
+    }
+
+    setPanoramaMemory(null);
+    setSelectedMemory(memory);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -534,8 +580,14 @@ export const GuestEventPage: React.FC = () => {
                     <div 
                         key={memory.id} 
                         className="relative aspect-[4/5] bg-gray-100 rounded-xl overflow-hidden shadow-sm cursor-pointer group"
-                        onClick={() => setSelectedMemory(memory)}
+                        onClick={() => openMemory(memory)}
                     >
+                        {memory.is360ViewEnabled && memory.type === 'photo' && (
+                          <span className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] bg-cyan-400/95 text-slate-950 shadow-lg">
+                            360
+                          </span>
+                        )}
+
                         {memory.type === 'audio'
                           ? renderMemoryMedia(memory, 'w-full h-full')
                           : renderMemoryMedia(memory, 'w-full h-full object-cover')}
@@ -628,6 +680,17 @@ export const GuestEventPage: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {panoramaMemory && (
+        <PanoramaViewerModal
+          imageUrl={getImageUrl(panoramaMemory.storagePath)}
+          title={event.title}
+          createdAt={panoramaMemory.createdAt}
+          originalText={panoramaMemory.originalText}
+          aiStory={panoramaMemory.aiStory}
+          onClose={() => setPanoramaMemory(null)}
+        />
       )}
 
       {/* CROPPER MODAL - Rendered Conditionally */}

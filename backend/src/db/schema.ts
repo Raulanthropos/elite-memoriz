@@ -51,6 +51,7 @@ export const memories = pgTable('memories', {
   storagePath: text('storage_path').notNull(), // The path in Azure/Supabase
   originalText: text('original_text'), // For guest's raw memory
   aiStory: text('ai_story'), // The rewritten story
+  is360ViewEnabled: boolean('is_360_view_enabled').default(false).notNull(),
   isApproved: boolean('is_approved').default(false),
   fileSize: integer('file_size').notNull(),
   likes: integer('likes').default(0),

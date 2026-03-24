@@ -6,6 +6,7 @@ import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText, Heart } from '
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 import { API_URL } from '../lib/config';
 import { getTierBannerBadge } from '../lib/tiers';
+import { PANORAMA_WARNING_TEXT } from '../components/PanoramaViewerModal';
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {
@@ -14,6 +15,7 @@ interface Memory {
   storagePath: string; 
   originalText?: string;
   aiStory?: string;
+  is360ViewEnabled: boolean;
   isApproved: boolean;
   createdAt: string;
   likes: number;
@@ -58,22 +60,36 @@ const renderMemoryPreview = (memory: Memory, className: string) => {
 // Memory Card Component
 const MemoryCard = ({ 
     memory, 
+    eventPackage,
     onUpdateStatus,
+    onToggle360View,
     onDelete,
     onViewStory
 }: { 
     memory: Memory; 
+    eventPackage: string;
     onUpdateStatus: (id: string, status: boolean) => void;
+    onToggle360View: (id: string, nextValue: boolean) => void;
     onDelete: (id: string) => void;
     onViewStory: (memory: Memory) => void;
 }) => {
   const text = memory.aiStory || "";
   const isLongText = text.length > 100;
+  const canToggle360View = eventPackage === 'LUXURY' && memory.type === 'photo';
+  const actionCount = (memory.isApproved ? 1 : 2) + (canToggle360View ? 1 : 0);
+  const actionGridClass =
+    actionCount === 1 ? 'grid-cols-1' : actionCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
 
   return (
     <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-lg hover:border-indigo-500/50 transition-all flex flex-col h-full group">
       {/* Image Area */}
       <div className="aspect-[4/3] w-full relative bg-gray-800 overflow-hidden cursor-pointer" onClick={() => onViewStory(memory)}>
+          {memory.is360ViewEnabled && (
+            <span className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.2em] bg-cyan-500/90 text-slate-950 shadow-sm">
+              360
+            </span>
+          )}
+
           {memory.type === 'audio' ? (
             renderMemoryPreview(memory, 'w-full h-full')
           ) : (
@@ -122,13 +138,26 @@ const MemoryCard = ({
           )}
 
           {/* Action Buttons */}
-          <div className={`grid gap-2 mt-auto ${memory.isApproved ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          <div className={`grid gap-2 mt-auto ${actionGridClass}`}>
               {!memory.isApproved && (
                   <button 
                       onClick={() => onUpdateStatus(memory.id, true)}
                       className="py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-semibold text-white transition-colors"
                   >
                       Approve
+                  </button>
+              )}
+
+              {canToggle360View && (
+                  <button
+                      onClick={() => onToggle360View(memory.id, !memory.is360ViewEnabled)}
+                      className={`py-2 rounded-lg text-xs font-semibold transition-colors border ${
+                        memory.is360ViewEnabled
+                          ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25'
+                          : 'border-cyan-700/40 text-cyan-300 hover:bg-cyan-500/10'
+                      }`}
+                  >
+                      {memory.is360ViewEnabled ? 'Disable360View' : 'Enable360View'}
                   </button>
               )}
               
@@ -401,6 +430,46 @@ const EventDetailsPage = () => {
     }
   };
 
+  const toggle360View = async (memoryId: string, nextValue: boolean) => {
+    if (nextValue && !window.confirm(PANORAMA_WARNING_TEXT)) {
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const res = await fetch(`${API_URL}/api/host/memories/${memoryId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is360ViewEnabled: nextValue })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to update 360 view');
+      }
+
+      setMemories(prev => prev.map(memory => (
+        String(memory.id) === String(memoryId)
+          ? { ...memory, is360ViewEnabled: nextValue }
+          : memory
+      )));
+
+      setSelectedMemory(current => (
+        current && String(current.id) === String(memoryId)
+          ? { ...current, is360ViewEnabled: nextValue }
+          : current
+      ));
+    } catch (err: any) {
+      console.error('Error updating 360 view:', err);
+      alert(err.message || 'Failed to update 360 view');
+    }
+  };
+
   // NEW: Force Delete Event (Admin Only)
   const handleDeleteEvent = async () => {
       const confirmText = "DELETE-EVENT";
@@ -510,6 +579,7 @@ const EventDetailsPage = () => {
                      storagePath: payload.new.storage_path,
                      originalText: payload.new.original_text,
                      aiStory: payload.new.ai_story,
+                     is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                      isApproved: payload.new.is_approved,
                      createdAt: payload.new.created_at,
                      likes: payload.new.likes || 0
@@ -524,6 +594,7 @@ const EventDetailsPage = () => {
                 ...m,
                 isApproved: payload.new.is_approved,
                 aiStory: payload.new.ai_story,
+                is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                 likes: payload.new.likes || m.likes || 0
              } : m));
 
@@ -533,6 +604,7 @@ const EventDetailsPage = () => {
                      ...current,
                      isApproved: payload.new.is_approved,
                      aiStory: payload.new.ai_story,
+                     is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
                      likes: payload.new.likes || current.likes || 0
                    }
                  : current
@@ -650,7 +722,9 @@ const EventDetailsPage = () => {
               <MemoryCard 
                 key={memory.id} 
                 memory={memory} 
+                eventPackage={eventData?.package || 'BASIC'}
                 onUpdateStatus={updateStatus}
+                onToggle360View={toggle360View}
                 onDelete={deleteMemory}
                 onViewStory={setSelectedMemory}
               />
