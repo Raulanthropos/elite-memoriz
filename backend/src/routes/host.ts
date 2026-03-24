@@ -64,24 +64,39 @@ router.get('/profile', async (req: AuthRequest, res: Response) => {
 router.get('/events', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    const traceId = req.requestTraceId ?? `host-events-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = Date.now();
+
+    console.log(`[HOST_EVENTS_TRACE ${traceId}] route:start`, {
+      userId,
+    });
 
     // Fetch Profile
     const profile = await db.query.profiles.findFirst({
         where: eq(schema.profiles.id, userId)
     });
 
+    console.log(`[HOST_EVENTS_TRACE ${traceId}] route:profile-result`, {
+      found: Boolean(profile),
+      role: profile?.role ?? null,
+      tier: profile?.tier ?? null,
+    });
+
     if (!profile) {
         // Auto-create if missing (fallback) or 404
+        console.log(`[HOST_EVENTS_TRACE ${traceId}] route:profile-missing`);
         return res.status(404).json({ message: 'Profile not found. Please register.' });
     }
 
     let userEvents;
     if (profile.role === 'admin') {
+        console.log(`[HOST_EVENTS_TRACE ${traceId}] route:querying-admin-events`);
         userEvents = await db.query.events.findMany({
             orderBy: [desc(schema.events.date)],
             with: { memories: true }
         });
     } else {
+        console.log(`[HOST_EVENTS_TRACE ${traceId}] route:querying-host-events`);
         userEvents = await db.query.events.findMany({
             where: eq(schema.events.userId, userId),
             orderBy: [desc(schema.events.date)],
@@ -89,9 +104,15 @@ router.get('/events', async (req: AuthRequest, res: Response) => {
         });
     }
 
+    console.log(`[HOST_EVENTS_TRACE ${traceId}] route:success`, {
+      eventCount: Array.isArray(userEvents) ? userEvents.length : null,
+      durationMs: Date.now() - startedAt,
+    });
+
     res.json(userEvents);
   } catch (error) {
     console.error('Error fetching host events:', error);
+    console.error(`[HOST_EVENTS_TRACE ${req.requestTraceId ?? 'unknown'}] route:exception`, error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
