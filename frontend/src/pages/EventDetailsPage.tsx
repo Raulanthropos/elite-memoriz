@@ -5,13 +5,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText, Heart } from 'lucide-react';
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 import { API_URL } from '../lib/config';
-import { getTierBannerBadge } from '../lib/tiers';
+import { getTierBannerBadge, parseTier } from '../lib/tiers';
 import { PANORAMA_WARNING_TEXT } from '../components/PanoramaViewerModal';
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {
   id: string; // UUID
-  type: 'photo' | 'video' | 'audio' | 'story';
+  type: 'photo' | 'image' | 'video' | 'audio' | 'story';
   storagePath: string; 
   originalText?: string;
   aiStory?: string;
@@ -24,7 +24,7 @@ interface Memory {
 const renderMemoryPreview = (memory: Memory, className: string) => {
   const mediaUrl = getImageUrl(memory.storagePath);
 
-  if (memory.type === 'photo') {
+  if (memory.type === 'photo' || memory.type === 'image') {
     return (
       <img
         src={mediaUrl}
@@ -75,10 +75,27 @@ const MemoryCard = ({
 }) => {
   const text = memory.aiStory || "";
   const isLongText = text.length > 100;
-  const canToggle360View = eventPackage === 'LUXURY' && memory.type === 'photo';
+  const normalizedEventPackage = parseTier(eventPackage);
+  const normalizedMemoryType = String(memory.type).toLowerCase();
+  const isPhotoMemory = normalizedMemoryType === 'photo' || normalizedMemoryType === 'image';
+  const canToggle360View = normalizedEventPackage === 'LUXURY' && isPhotoMemory;
   const actionCount = (memory.isApproved ? 1 : 2) + (canToggle360View ? 1 : 0);
   const actionGridClass =
     actionCount === 1 ? 'grid-cols-1' : actionCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
+
+  useEffect(() => {
+    if (isPhotoMemory) {
+      console.log('[HOST 360 DEBUG]', {
+        memoryId: memory.id,
+        eventPackage,
+        normalizedEventPackage,
+        memoryType: memory.type,
+        normalizedMemoryType,
+        canToggle360View,
+        is360ViewEnabled: memory.is360ViewEnabled,
+      });
+    }
+  }, [canToggle360View, eventPackage, isPhotoMemory, memory.id, memory.is360ViewEnabled, memory.type, normalizedEventPackage, normalizedMemoryType]);
 
   return (
     <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-lg hover:border-indigo-500/50 transition-all flex flex-col h-full group">
@@ -138,11 +155,11 @@ const MemoryCard = ({
           )}
 
           {/* Action Buttons */}
-          <div className={`grid gap-2 mt-auto ${actionGridClass}`}>
+          <div className={`grid gap-2 mt-auto auto-rows-fr items-stretch ${actionGridClass}`}>
               {!memory.isApproved && (
                   <button 
                       onClick={() => onUpdateStatus(memory.id, true)}
-                      className="py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-semibold text-white transition-colors"
+                      className="min-w-0 py-2 px-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-semibold text-white transition-colors"
                   >
                       Approve
                   </button>
@@ -151,19 +168,19 @@ const MemoryCard = ({
               {canToggle360View && (
                   <button
                       onClick={() => onToggle360View(memory.id, !memory.is360ViewEnabled)}
-                      className={`py-2 rounded-lg text-xs font-semibold transition-colors border ${
+                      className={`min-w-0 py-2 px-2 rounded-lg text-xs font-semibold transition-colors border ${
                         memory.is360ViewEnabled
                           ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25'
                           : 'border-cyan-700/40 text-cyan-300 hover:bg-cyan-500/10'
                       }`}
                   >
-                      {memory.is360ViewEnabled ? 'Disable360View' : 'Enable360View'}
+                      {memory.is360ViewEnabled ? 'Disable 360 View' : 'Enable 360 View'}
                   </button>
               )}
               
               <button 
                   onClick={() => onDelete(memory.id)}
-                  className={`py-2 rounded-lg text-xs font-semibold transition-colors border ${
+                  className={`min-w-0 py-2 px-2 rounded-lg text-xs font-semibold transition-colors border ${
                       memory.isApproved 
                         ? 'border-red-900/50 text-red-400 hover:bg-red-900/20' 
                         : 'bg-gray-800 hover:bg-red-900/30 text-gray-300 hover:text-red-300'
