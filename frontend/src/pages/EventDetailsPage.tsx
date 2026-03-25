@@ -659,49 +659,6 @@ const EventDetailsPage = () => {
     };
   }, [eventData?.id]);
 
-  useEffect(() => {
-    const currentEventId = eventData?.id;
-    if (!currentEventId) {
-      return;
-    }
-
-    let intervalId: number | null = null;
-
-    const startPolling = () => {
-      if (document.visibilityState !== 'visible' || intervalId !== null) {
-        return;
-      }
-
-      intervalId = window.setInterval(() => {
-        void refreshEventMemories();
-      }, 2000);
-    };
-
-    const stopPolling = () => {
-      if (intervalId !== null) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshEventMemories();
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      stopPolling();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [eventData?.id]);
-
   const guestUrl = eventSlug ? `${window.location.origin}/e/${eventSlug}` : '';
 
   return (
