@@ -345,7 +345,8 @@ const EventDetailsPage = () => {
       }
 
       const memoriesRes = await fetch(`${API_URL}/api/host/events/${id}/memories`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        cache: 'no-store',
       });
 
       if (!memoriesRes.ok) {
@@ -535,7 +536,8 @@ const EventDetailsPage = () => {
 
         // 1. Fetch Memories
         const memoriesRes = await fetch(`${API_URL}/api/host/events/${id}/memories`, {
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          cache: 'no-store',
         });
 
         // 2. Fetch All Events (to find current one)
@@ -654,6 +656,49 @@ const EventDetailsPage = () => {
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  }, [eventData?.id]);
+
+  useEffect(() => {
+    const currentEventId = eventData?.id;
+    if (!currentEventId) {
+      return;
+    }
+
+    let intervalId: number | null = null;
+
+    const startPolling = () => {
+      if (document.visibilityState !== 'visible' || intervalId !== null) {
+        return;
+      }
+
+      intervalId = window.setInterval(() => {
+        void refreshEventMemories();
+      }, 2000);
+    };
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshEventMemories();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [eventData?.id]);
 
