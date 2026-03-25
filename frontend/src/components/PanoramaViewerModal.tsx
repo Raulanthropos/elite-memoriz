@@ -78,7 +78,7 @@ export const PanoramaViewerModal = ({
           </div>
 
           <div className="p-5 bg-gray-950 text-white border-t border-gray-800 lg:border-t-0 lg:border-l space-y-5">
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            {/* <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
               <div className="flex items-start gap-3">
                 <AlertTriangle size={18} className="text-amber-300 mt-0.5 flex-shrink-0" />
                 <div>
@@ -88,7 +88,7 @@ export const PanoramaViewerModal = ({
                   </p>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             <div className="text-sm text-gray-400">
               Captured on {new Date(createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}

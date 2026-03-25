@@ -316,7 +316,6 @@ const CreateEvent = () => {
       {isCropping && previewUrl && (
           <ImageCropper 
             imageSrc={previewUrl}
-            aspectRatio={16/9}
             onCropComplete={onCropComplete}
             onCancel={() => {
                 setIsCropping(false);
