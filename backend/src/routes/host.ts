@@ -3,15 +3,12 @@ import { db } from '../db';
 import * as schema from '../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { deleteSupabaseUploadFile, StorageService } from '../services/storage';
+import { StorageService } from '../services/storage';
 import { TIER_LIMITS, parseTier } from '../lib/tiers';
+import { deleteEventWithAssets } from '../services/eventCleanup';
 
 const router = Router();
 const MAX_AI_STORY_LENGTH = 5_000;
-
-const isManagedUploadPath = (value: string | null | undefined): value is string => {
-  return Boolean(value && !value.startsWith('http'));
-};
 
 // Apply auth middleware to all host routes
 router.use(authMiddleware);
@@ -255,50 +252,7 @@ router.delete('/events/:id', async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ message: 'Unauthorized. Only the host or an admin can delete this event.' });
         }
 
-        let memoryStoragePaths: string[] = [];
-        let coverImagePath: string | null = null;
-
-        await db.transaction(async (tx) => {
-            const eventMemories = await tx.query.memories.findMany({
-                where: eq(schema.memories.eventId, eventId),
-                columns: {
-                    storagePath: true,
-                },
-            });
-
-            memoryStoragePaths = eventMemories
-                .map((memory) => memory.storagePath)
-                .filter((path): path is string => Boolean(path));
-
-            coverImagePath = isManagedUploadPath(event.coverImage) ? event.coverImage : null;
-
-            await tx.delete(schema.eventGuests).where(eq(schema.eventGuests.eventId, eventId));
-            await tx.delete(schema.memories).where(eq(schema.memories.eventId, eventId));
-            await tx.delete(schema.events).where(eq(schema.events.id, eventId));
-        });
-
-        const cleanupFailures: string[] = [];
-
-        const memoryCleanupResults = await Promise.allSettled(
-            memoryStoragePaths.map((path) => StorageService.deleteFile(path))
-        );
-
-        memoryCleanupResults.forEach((result, index) => {
-            if (result.status === 'rejected') {
-                const path = memoryStoragePaths[index];
-                cleanupFailures.push(`memory:${path}`);
-                console.error('Event delete storage cleanup failed:', path, result.reason);
-            }
-        });
-
-        if (coverImagePath) {
-            try {
-                await deleteSupabaseUploadFile(coverImagePath);
-            } catch (error) {
-                cleanupFailures.push(`cover:${coverImagePath}`);
-                console.error('Event delete cover cleanup failed:', coverImagePath, error);
-            }
-        }
+        const { cleanupFailures } = await deleteEventWithAssets(eventId);
 
         if (cleanupFailures.length > 0) {
             return res.status(200).json({

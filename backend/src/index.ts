@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 import { eventRoutes } from './routes/events';
 import { hostRoutes } from './routes/host';
+import { deleteExpiredEvents } from './services/eventCleanup';
 
 dotenv.config();
 
@@ -28,7 +30,43 @@ app.get('/health', (req, res) => {
 
 // Start server
 const PORT = Number(process.env.PORT) || 4000;
+const EVENT_CLEANUP_SCHEDULE = process.env.EVENT_CLEANUP_SCHEDULE || '0 0 * * *';
+const EVENT_CLEANUP_TIMEZONE = process.env.EVENT_CLEANUP_TIMEZONE || 'UTC';
+
+const runExpiredEventCleanup = async (reason: 'startup' | 'scheduled') => {
+  try {
+    const result = await deleteExpiredEvents();
+    console.log('[EVENT_CLEANUP] completed', {
+      reason,
+      checkedAt: result.checkedAt.toISOString(),
+      deletedCount: result.deletedCount,
+      cleanupFailureCount: result.cleanupFailures.length,
+    });
+
+    if (result.cleanupFailures.length > 0) {
+      console.warn('[EVENT_CLEANUP] cleanup failures', result.cleanupFailures);
+    }
+  } catch (error) {
+    console.error('[EVENT_CLEANUP] failed', { reason, error });
+  }
+};
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('[EVENT_CLEANUP] scheduler configured', {
+    schedule: EVENT_CLEANUP_SCHEDULE,
+    timezone: EVENT_CLEANUP_TIMEZONE,
+  });
+
+  void runExpiredEventCleanup('startup');
 });
+
+cron.schedule(
+  EVENT_CLEANUP_SCHEDULE,
+  () => {
+    void runExpiredEventCleanup('scheduled');
+  },
+  {
+    timezone: EVENT_CLEANUP_TIMEZONE,
+  }
+);
