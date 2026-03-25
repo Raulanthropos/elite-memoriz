@@ -333,6 +333,32 @@ const EventDetailsPage = () => {
   const [eventData, setEventData] = useState<any>(null);
   const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
 
+  const refreshEventMemories = async () => {
+    if (!id) {
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return;
+      }
+
+      const memoriesRes = await fetch(`${API_URL}/api/host/events/${id}/memories`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+
+      if (!memoriesRes.ok) {
+        return;
+      }
+
+      const memoriesData = await memoriesRes.json();
+      setMemories(memoriesData);
+    } catch (error) {
+      console.error('Failed to refresh host memories:', error);
+    }
+  };
+
   // Approve Logic
   const updateStatus = async (memoryId: string, isApproved: boolean) => {
     try {
@@ -571,31 +597,33 @@ const EventDetailsPage = () => {
         (payload) => {
            const nextRow = payload.new as { event_id?: string } | undefined;
            const previousRow = payload.old as { event_id?: string } | undefined;
+           const changedMemoryId = String(
+             (payload.new as { id?: string | number } | undefined)?.id
+             ?? (payload.old as { id?: string | number } | undefined)?.id
+             ?? ''
+           );
            const payloadEventId = String(nextRow?.event_id ?? previousRow?.event_id ?? '');
-           if (payloadEventId !== String(currentEventId)) {
-             return;
-           }
-
            console.log('Host Realtime Payload:', payload);
 
            if (payload.eventType === 'INSERT') {
-              setMemories(prev => {
-                if (prev.some(m => String(m.id) === String(payload.new.id))) return prev;
-                return [
-                  {
-                     id: payload.new.id,
-                     type: payload.new.type,
-                     storagePath: payload.new.storage_path,
-                     originalText: payload.new.original_text,
-                     aiStory: payload.new.ai_story,
-                     is360ViewEnabled: payload.new.is_360_view_enabled ?? false,
-                     isApproved: payload.new.is_approved,
-                     createdAt: payload.new.created_at,
-                     likes: payload.new.likes || 0
-                  },
-                  ...prev
-                ];
-              });
+              if (payloadEventId && payloadEventId !== String(currentEventId)) {
+                return;
+              }
+
+              void refreshEventMemories();
+              return;
+           }
+
+           if (payload.eventType === 'DELETE') {
+              setMemories(prev => prev.filter(m => String(m.id) !== changedMemoryId));
+              setSelectedMemory(current => (
+                current && String(current.id) === changedMemoryId ? null : current
+              ));
+              return;
+           }
+
+           if (payloadEventId !== String(currentEventId)) {
+             return;
            }
 
            if (payload.eventType === 'UPDATE') {
@@ -620,12 +648,6 @@ const EventDetailsPage = () => {
              ));
            }
 
-           if (payload.eventType === 'DELETE') {
-              setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
-              setSelectedMemory(current => (
-                current && String(current.id) === String(payload.old.id) ? null : current
-              ));
-           }
         }
       )
       .subscribe();

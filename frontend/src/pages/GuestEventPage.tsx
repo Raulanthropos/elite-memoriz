@@ -177,12 +177,29 @@ export const GuestEventPage: React.FC = () => {
         (payload) => {
            const nextRow = payload.new as { event_id?: string } | undefined;
            const previousRow = payload.old as { event_id?: string } | undefined;
+           const changedMemoryId = String(
+             (payload.new as { id?: string | number } | undefined)?.id
+             ?? (payload.old as { id?: string | number } | undefined)?.id
+             ?? ''
+           );
            const payloadEventId = String(nextRow?.event_id ?? previousRow?.event_id ?? '');
+           console.log('Guest Realtime Payload:', payload);
+
+           if (payload.eventType === 'DELETE') {
+              setMemories(prev => prev.filter(m => String(m.id) !== changedMemoryId));
+              setSelectedMemory(curr => (
+                curr && String(curr.id) === changedMemoryId ? null : curr
+              ));
+              setPanoramaMemory(curr => (
+                curr && String(curr.id) === changedMemoryId ? null : curr
+              ));
+              return;
+           }
+
            if (payloadEventId !== String(currentEventId)) {
              return;
            }
 
-           console.log('Guest Realtime Payload:', payload);
            // Guests should only ever receive rows for this event; keep approved-only UI behavior.
             if (payload.eventType === 'INSERT' && payload.new.is_approved) {
               setMemories(prev => {
@@ -269,15 +286,6 @@ export const GuestEventPage: React.FC = () => {
               }
            }
 
-           if (payload.eventType === 'DELETE') {
-              setMemories(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
-              setSelectedMemory(curr => (
-                curr && String(curr.id) === String(payload.old.id) ? null : curr
-              ));
-              setPanoramaMemory(curr => (
-                curr && String(curr.id) === String(payload.old.id) ? null : curr
-              ));
-           }
         }
       )
       .subscribe();
