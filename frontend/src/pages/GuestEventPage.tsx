@@ -61,6 +61,7 @@ export const GuestEventPage: React.FC = () => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEventFull, setIsEventFull] = useState(false); // NEW STATE FOR 100-GUEST LIMIT
+  const [accessError, setAccessError] = useState<string | null>(null);
   
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -89,6 +90,9 @@ export const GuestEventPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setAccessError(null);
+        setIsEventFull(false);
+
         // 1. Generate or Retrieve Device ID
         let deviceId = localStorage.getItem('guest_device_id');
         if (!deviceId) {
@@ -111,11 +115,18 @@ export const GuestEventPage: React.FC = () => {
         
         console.log(`[CLIENT JOIN RES] Status: ${joinRes.status}`);
 
-        if (joinRes.status === 403) {
-            console.log(`[CLIENT JOIN RES] Blocking access!`);
-            setIsEventFull(true);
-            setLoading(false);
-            return; // STOP execution, don't load memories or Realtime
+        if (!joinRes.ok) {
+            const joinData = await joinRes.json().catch(() => null);
+            const joinMessage = joinData?.message || 'Unable to access this event.';
+
+            if (joinRes.status === 403 && joinMessage === 'Gallery Full') {
+                console.log(`[CLIENT JOIN RES] Blocking access!`);
+                setIsEventFull(true);
+                setLoading(false);
+                return; // STOP execution, don't load memories or Realtime
+            }
+
+            throw new Error(joinMessage);
         }
 
         // 3. Fetch Data if allowed in
@@ -124,7 +135,10 @@ export const GuestEventPage: React.FC = () => {
             fetch(`${API_URL}/api/events/${slug}/memories`)
         ]);
 
-        if (!eventRes.ok) throw new Error('Event not found');
+        if (!eventRes.ok) {
+            const eventData = await eventRes.json().catch(() => null);
+            throw new Error(eventData?.message || 'Event not found');
+        }
         
         const eventData = await eventRes.json();
         setEvent(eventData);
@@ -136,12 +150,15 @@ export const GuestEventPage: React.FC = () => {
 
       } catch (err) {
         console.error(err);
+        setAccessError((err as Error).message || 'Unable to load this event.');
+        setEvent(null);
+        setMemories([]);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [slug, isEventFull]);
+  }, [slug]);
 
   useEffect(() => {
     const currentEventId = event?.id;
@@ -156,9 +173,15 @@ export const GuestEventPage: React.FC = () => {
           event: '*',
           schema: 'public',
           table: 'memories',
-          filter: `event_id=eq.${currentEventId}`,
         },
         (payload) => {
+           const nextRow = payload.new as { event_id?: string } | undefined;
+           const previousRow = payload.old as { event_id?: string } | undefined;
+           const payloadEventId = String(nextRow?.event_id ?? previousRow?.event_id ?? '');
+           if (payloadEventId !== String(currentEventId)) {
+             return;
+           }
+
            console.log('Guest Realtime Payload:', payload);
            // Guests should only ever receive rows for this event; keep approved-only UI behavior.
             if (payload.eventType === 'INSERT' && payload.new.is_approved) {
@@ -495,7 +518,7 @@ export const GuestEventPage: React.FC = () => {
   if (!event) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">
-          Event not found
+          {accessError || 'Event not found'}
       </div>
     );
   }

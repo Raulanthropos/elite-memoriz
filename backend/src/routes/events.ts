@@ -10,7 +10,6 @@ import { TIER_LIMITS, Tier, TierLimits, parseTier } from '../lib/tiers';
 
 const router = Router();
 const MAX_MEMORY_TEXT_LENGTH = 1_000;
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ALLOWED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
 
 type UploadRouteLocals = {
@@ -134,7 +133,9 @@ const uploadSinglePhoto = (req: Request, res: Response<unknown, UploadRouteLocal
 const getSlugOrRespond = (req: Request, res: Response): string | null => {
   const slug = typeof req.params.slug === 'string' ? req.params.slug.trim() : '';
 
-  if (!slug || slug.length > 255 || !SLUG_PATTERN.test(slug)) {
+  // Legacy events may have older slug formats. We only require a non-empty single path segment here
+  // because the value is used in a parameterized equality query, not string-concatenated SQL.
+  if (!slug || slug.length > 255) {
     res.status(400).json({ message: 'Invalid event slug' });
     return null;
   }
@@ -217,6 +218,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       title: event.title,
       welcomeMessage: event.welcomeMessage,
       coverImage: event.coverImage,
+      category: event.category,
       date: event.date,
       spotifyUrl: event.spotifyUrl,
       package: parseTier(event.package) ?? 'BASIC',

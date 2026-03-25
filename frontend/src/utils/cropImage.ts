@@ -29,16 +29,20 @@ const getOriginalBlob = async (imageSrc: string): Promise<Blob> => {
  * Check if the browser supports canvas.toBlob
  */
 export async function getCroppedImg(
-  imageSrc: string,
+  imageSource: string | HTMLImageElement,
   pixelCrop: { x: number; y: number; width: number; height: number },
   rotation = 0,
   options: CropImageOptions = {}
 ): Promise<Blob | null> {
   if (options.preserveOriginal || options.skipCrop) {
-    return getOriginalBlob(imageSrc)
+    if (typeof imageSource !== 'string') {
+      return getOriginalBlob(imageSource.currentSrc || imageSource.src)
+    }
+
+    return getOriginalBlob(imageSource)
   }
 
-  const image = await createImage(imageSrc)
+  const image = typeof imageSource === 'string' ? await createImage(imageSource) : imageSource
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
 
@@ -46,11 +50,14 @@ export async function getCroppedImg(
     return null
   }
 
+  const sourceWidth = image.naturalWidth || image.width
+  const sourceHeight = image.naturalHeight || image.height
+
   const boundedCrop = {
     x: Math.max(0, Math.round(pixelCrop.x)),
     y: Math.max(0, Math.round(pixelCrop.y)),
-    width: Math.min(image.width - Math.max(0, Math.round(pixelCrop.x)), Math.round(pixelCrop.width)),
-    height: Math.min(image.height - Math.max(0, Math.round(pixelCrop.y)), Math.round(pixelCrop.height)),
+    width: Math.min(sourceWidth - Math.max(0, Math.round(pixelCrop.x)), Math.round(pixelCrop.width)),
+    height: Math.min(sourceHeight - Math.max(0, Math.round(pixelCrop.y)), Math.round(pixelCrop.height)),
   }
 
   if (boundedCrop.width <= 0 || boundedCrop.height <= 0) {
@@ -80,7 +87,7 @@ export async function getCroppedImg(
     })
   }
 
-  const maxSize = Math.max(image.width, image.height)
+  const maxSize = Math.max(sourceWidth, sourceHeight)
   const safeArea = 2 * ((maxSize / 2) * Math.sqrt(2))
 
   // set each dimensions to double largest dimension to allow for a safe area for the
@@ -96,8 +103,8 @@ export async function getCroppedImg(
   // draw rotated image and store data.
   ctx.drawImage(
     image,
-    safeArea / 2 - image.width * 0.5,
-    safeArea / 2 - image.height * 0.5
+    safeArea / 2 - sourceWidth * 0.5,
+    safeArea / 2 - sourceHeight * 0.5
   )
 
   const data = ctx.getImageData(0, 0, safeArea, safeArea)
@@ -109,8 +116,8 @@ export async function getCroppedImg(
   // paste generated rotate image with correct offsets for x,y crop values.
   ctx.putImageData(
     data,
-    Math.round(0 - safeArea / 2 + image.width * 0.5 - boundedCrop.x),
-    Math.round(0 - safeArea / 2 + image.height * 0.5 - boundedCrop.y)
+    Math.round(0 - safeArea / 2 + sourceWidth * 0.5 - boundedCrop.x),
+    Math.round(0 - safeArea / 2 + sourceHeight * 0.5 - boundedCrop.y)
   )
 
   // As Blob

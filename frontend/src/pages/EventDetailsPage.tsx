@@ -567,9 +567,15 @@ const EventDetailsPage = () => {
           event: '*',
           schema: 'public',
           table: 'memories',
-          filter: `event_id=eq.${currentEventId}`,
         },
         (payload) => {
+           const nextRow = payload.new as { event_id?: string } | undefined;
+           const previousRow = payload.old as { event_id?: string } | undefined;
+           const payloadEventId = String(nextRow?.event_id ?? previousRow?.event_id ?? '');
+           if (payloadEventId !== String(currentEventId)) {
+             return;
+           }
+
            console.log('Host Realtime Payload:', payload);
 
            if (payload.eventType === 'INSERT') {

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import ReactCrop, { type PercentCrop } from 'react-image-crop';
+import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { getCroppedImg } from '../utils/cropImage';
 import { Loader2, Check, X } from 'lucide-react';
@@ -11,31 +11,46 @@ interface ImageCropperProps {
 }
 
 const ImageCropper = ({ imageSrc, onCropComplete, onCancel }: ImageCropperProps) => {
-  const [crop, setCrop] = useState<PercentCrop>();
-  const [completedCrop, setCompletedCrop] = useState<PercentCrop | null>(null);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [loading, setLoading] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
   // Auto-center the crop when image loads
-  const onImageLoad = () => {
-    setCrop({ unit: '%', x: 10, y: 10, width: 80, height: 80 });
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const initialWidth = width * 0.8;
+    const initialHeight = height * 0.8;
+    const x = (width - initialWidth) / 2;
+    const y = (height - initialHeight) / 2;
+
+    setCrop({ unit: 'px', x, y, width: initialWidth, height: initialHeight });
   };
 
   const handleSave = async () => {
     if (!completedCrop || !imgRef.current) return;
     setLoading(true);
     try {
+      const renderedWidth = imgRef.current.width;
+      const renderedHeight = imgRef.current.height;
       const naturalWidth = imgRef.current.naturalWidth;
       const naturalHeight = imgRef.current.naturalHeight;
 
+      if (!renderedWidth || !renderedHeight || !naturalWidth || !naturalHeight) {
+        return;
+      }
+
+      const scaleX = naturalWidth / renderedWidth;
+      const scaleY = naturalHeight / renderedHeight;
+
       const absolutePixelCrop = {
-        x: Math.round((completedCrop.x / 100) * naturalWidth),
-        y: Math.round((completedCrop.y / 100) * naturalHeight),
-        width: Math.max(1, Math.round((completedCrop.width / 100) * naturalWidth)),
-        height: Math.max(1, Math.round((completedCrop.height / 100) * naturalHeight)),
+        x: Math.round(completedCrop.x * scaleX),
+        y: Math.round(completedCrop.y * scaleY),
+        width: Math.max(1, Math.round(completedCrop.width * scaleX)),
+        height: Math.max(1, Math.round(completedCrop.height * scaleY)),
       };
 
-      const croppedBlob = await getCroppedImg(imageSrc, absolutePixelCrop);
+      const croppedBlob = await getCroppedImg(imgRef.current, absolutePixelCrop);
       if (croppedBlob) {
         onCropComplete(croppedBlob);
       }
@@ -52,8 +67,8 @@ const ImageCropper = ({ imageSrc, onCropComplete, onCancel }: ImageCropperProps)
       <div className="relative w-full max-w-4xl h-[70vh] flex items-center justify-center bg-gray-900 rounded-2xl overflow-auto shadow-2xl border border-gray-800 ring-1 ring-white/10 p-4">
         <ReactCrop
           crop={crop}
-          onChange={(_, percentCrop) => setCrop(percentCrop)}
-          onComplete={(_, percentCrop) => setCompletedCrop(percentCrop)}
+          onChange={(nextCrop) => setCrop(nextCrop)}
+          onComplete={(nextCrop) => setCompletedCrop(nextCrop)}
           className="max-h-full max-w-full"
         >
           <img 
