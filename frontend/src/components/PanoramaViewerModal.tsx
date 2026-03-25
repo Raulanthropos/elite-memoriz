@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Viewer } from '@photo-sphere-viewer/core';
 import '@photo-sphere-viewer/core/index.css';
-import { X, AlertTriangle } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface PanoramaViewerModalProps {
   imageUrl: string;

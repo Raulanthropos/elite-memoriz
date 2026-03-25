@@ -46,6 +46,40 @@ export async function getCroppedImg(
     return null
   }
 
+  const boundedCrop = {
+    x: Math.max(0, Math.round(pixelCrop.x)),
+    y: Math.max(0, Math.round(pixelCrop.y)),
+    width: Math.min(image.width - Math.max(0, Math.round(pixelCrop.x)), Math.round(pixelCrop.width)),
+    height: Math.min(image.height - Math.max(0, Math.round(pixelCrop.y)), Math.round(pixelCrop.height)),
+  }
+
+  if (boundedCrop.width <= 0 || boundedCrop.height <= 0) {
+    return null
+  }
+
+  canvas.width = boundedCrop.width
+  canvas.height = boundedCrop.height
+
+  if (rotation === 0) {
+    ctx.drawImage(
+      image,
+      boundedCrop.x,
+      boundedCrop.y,
+      boundedCrop.width,
+      boundedCrop.height,
+      0,
+      0,
+      boundedCrop.width,
+      boundedCrop.height
+    )
+
+    return new Promise((resolve) => {
+      canvas.toBlob((file) => {
+        resolve(file)
+      }, 'image/jpeg')
+    })
+  }
+
   const maxSize = Math.max(image.width, image.height)
   const safeArea = 2 * ((maxSize / 2) * Math.sqrt(2))
 
@@ -69,14 +103,14 @@ export async function getCroppedImg(
   const data = ctx.getImageData(0, 0, safeArea, safeArea)
 
   // set canvas width to final desired crop size - this will clear existing context
-  canvas.width = pixelCrop.width
-  canvas.height = pixelCrop.height
+  canvas.width = boundedCrop.width
+  canvas.height = boundedCrop.height
 
   // paste generated rotate image with correct offsets for x,y crop values.
   ctx.putImageData(
     data,
-    Math.round(0 - safeArea / 2 + image.width * 0.5 - pixelCrop.x),
-    Math.round(0 - safeArea / 2 + image.height * 0.5 - pixelCrop.y)
+    Math.round(0 - safeArea / 2 + image.width * 0.5 - boundedCrop.x),
+    Math.round(0 - safeArea / 2 + image.height * 0.5 - boundedCrop.y)
   )
 
   // As Blob
