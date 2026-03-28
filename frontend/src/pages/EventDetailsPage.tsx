@@ -6,7 +6,7 @@ import { X, QrCode, Trash2, AlertTriangle, CheckCircle, FileText, Heart } from '
 import { getImageUrl } from '../utils/image'; // FIX: Imported centralized utility
 import { API_URL } from '../lib/config';
 import { getTierBannerBadge, parseTier } from '../lib/tiers';
-import { PANORAMA_WARNING_TEXT } from '../components/PanoramaViewerModal';
+import { PANORAMA_WARNING_TEXT } from '../components/panoramaConstants';
 
 // FIX: Updated to match Backend/Drizzle naming (camelCase) & UUIDs
 interface Memory {

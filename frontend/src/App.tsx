@@ -1,17 +1,27 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import CreateEvent from './pages/CreateEvent';
-import PaymentPlaceholder from './pages/PaymentPlaceholder';
-import EventDetails from './pages/EventDetailsPage';
-import ExitPage from './pages/ExitPage';
-import { GuestEventPage } from './pages/GuestEventPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { supabase } from './lib/supabase';
-import './index.css'; // Explicit import to ensure Tailwind loads
+import './index.css';
+
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CreateEvent = lazy(() => import('./pages/CreateEvent'));
+const PaymentPlaceholder = lazy(() => import('./pages/PaymentPlaceholder'));
+const EventDetails = lazy(() => import('./pages/EventDetailsPage'));
+const ExitPage = lazy(() => import('./pages/ExitPage'));
+const GuestEventPage = lazy(() =>
+  import('./pages/GuestEventPage').then((module) => ({ default: module.GuestEventPage }))
+);
+
+const RouteFallback = () => (
+  <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 text-gray-900">
+    <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+    <p className="font-medium tracking-wide text-gray-500">Loading Elite Memoriz...</p>
+  </div>
+);
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -25,49 +35,40 @@ function App() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen bg-gray-50 text-gray-900">
-        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-4"></div>
-        <p className="text-gray-500 font-medium tracking-wide">Loading Elite Memoriz...</p>
-      </div>
-    );
+    return <RouteFallback />;
   }
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased">
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/payment" element={<PaymentPlaceholder />} />
-          
-          {/* Guest Route */}
-          <Route path="/e/:slug" element={<GuestEventPage />} />
-          <Route path="/exit" element={<ExitPage />} />
-
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/create-event" 
-            element={<CreateEvent />} 
-          />
-          <Route 
-            path="/dashboard/event/:id" 
-            element={
-              <ProtectedRoute>
-                <EventDetails />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+      <div className="min-h-screen bg-gray-50 font-sans antialiased text-gray-900">
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/payment" element={<PaymentPlaceholder />} />
+            <Route path="/e/:slug" element={<GuestEventPage />} />
+            <Route path="/exit" element={<ExitPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/create-event" element={<CreateEvent />} />
+            <Route
+              path="/dashboard/event/:id"
+              element={
+                <ProtectedRoute>
+                  <EventDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       </div>
     </Router>
   );

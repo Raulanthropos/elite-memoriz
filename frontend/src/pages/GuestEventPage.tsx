@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Camera, Loader2, CheckCircle2, Image as ImageIcon, Send, X, LogOut, Heart } from 'lucide-react';
 import { getEventCoverUrl, getImageUrl } from '../utils/image';
 import ImageCropper from '../components/ImageCropper'; // FIX: Import Cropper
 import { API_URL } from '../lib/config';
-import { PanoramaViewerModal } from '../components/PanoramaViewerModal';
 import { getCroppedImg } from '../utils/cropImage';
+
+const PanoramaViewerModal = lazy(() =>
+  import('../components/PanoramaViewerModal').then((module) => ({
+    default: module.PanoramaViewerModal,
+  }))
+);
 
 interface EventDetails {
   id: string;
@@ -794,14 +799,22 @@ export const GuestEventPage: React.FC = () => {
       )}
 
       {panoramaMemory && (
-        <PanoramaViewerModal
-          imageUrl={getImageUrl(panoramaMemory.storagePath)}
-          title={event.title}
-          createdAt={panoramaMemory.createdAt}
-          originalText={panoramaMemory.originalText}
-          aiStory={panoramaMemory.aiStory}
-          onClose={() => setPanoramaMemory(null)}
-        />
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 text-white">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          }
+        >
+          <PanoramaViewerModal
+            imageUrl={getImageUrl(panoramaMemory.storagePath)}
+            title={event.title}
+            createdAt={panoramaMemory.createdAt}
+            originalText={panoramaMemory.originalText}
+            aiStory={panoramaMemory.aiStory}
+            onClose={() => setPanoramaMemory(null)}
+          />
+        </Suspense>
       )}
 
       {/* CROPPER MODAL - Rendered Conditionally */}
