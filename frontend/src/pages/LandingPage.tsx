@@ -45,7 +45,7 @@ const copy = {
     experienceBullets: [
       'Ιδιωτική πρόσβαση με QR ή direct link',
       'Προεπιλογή tier από την αρχική σελίδα',
-      'Διαφορετικά όρια σε καλεσμένους, storage και retainment ανά πακέτο',
+      'Διαφορετικά όρια σε καλεσμένους, storage και διάρκεια διατήρησης ανά πακέτο',
     ],
     pricingTitle: 'Επίλεξε πακέτο και πήγαινε στο Create Event',
     pricingBody:
@@ -55,21 +55,21 @@ const copy = {
         name: 'Basic',
         audience: 'Για ένα πιο μικρό και άμεσο event',
         description: 'Καθαρή επιλογή για ένα event με όσα χρειάζονται χωρίς περιττή πολυπλοκότητα.',
-        features: ['Έως 100 καλεσμένοι', '10 GB cloud storage', '1 μήνας διατήρησης δεδομένων'],
+        features: ['Έως 100 καλεσμένοι', '10 GB cloud storage', 'Διατήρηση δεδομένων για 1 μήνα'],
         cta: 'Επίλεξε Basic',
       },
       PREMIUM: {
         name: 'Premium',
         audience: 'Για events με μεγαλύτερη ροή και πιο πλούσιο storytelling',
         description: 'Η πιο ισορροπημένη επιλογή όταν θέλεις περισσότερο χώρο και AI stories στο ίδιο event.',
-        features: ['Έως 300 καλεσμένοι', '50 GB cloud storage', 'AI stories', '3 μήνες διατήρησης δεδομένων'],
+        features: ['Έως 300 καλεσμένοι', '50 GB cloud storage', 'AI stories', 'Διατήρηση δεδομένων για 3 μήνες'],
         cta: 'Επίλεξε Premium',
       },
       LUXURY: {
         name: 'Luxury',
         audience: 'Για premium παραγωγές και πιο immersive εμπειρία',
         description: 'Το πιο πλήρες πακέτο, με μεγαλύτερη χωρητικότητα, AI stories και 360 προβολή εικόνας.',
-        features: ['Έως 500 καλεσμένοι', '200 GB cloud storage', 'AI stories', '360° image view', '6 μήνες διατήρησης δεδομένων'],
+        features: ['Έως 500 καλεσμένοι', '200 GB cloud storage', 'AI stories', '360° image view', 'Διατήρηση δεδομένων για 6 μήνες'],
         cta: 'Επίλεξε Luxury',
       },
     },

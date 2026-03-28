@@ -4,7 +4,7 @@ import * as schema from '../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { StorageService } from '../services/storage';
-import { TIER_LIMITS, parseTier } from '../lib/tiers';
+import { getEventExpirationDate, TIER_LIMITS, parseTier } from '../lib/tiers';
 import { deleteEventWithAssets } from '../services/eventCleanup';
 
 const router = Router();
@@ -206,14 +206,16 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
     const randomSuffix = Math.random().toString(36).substring(2, 6);
     const slug = `${slugBase}-${randomSuffix}`;
 
+    const eventDate = new Date(date);
+
     const [newEvent] = await db.insert(schema.events).values({
       userId,
       title,
       slug,
-      date: new Date(date),
+      date: eventDate,
       category: category as 'wedding' | 'baptism' | 'party' | 'other',
       coverImage, // Save the cover image (path or URL)
-      expiresAt: new Date(new Date(date).getTime() + 30 * 24 * 60 * 60 * 1000), // Expire in 30 days
+      expiresAt: getEventExpirationDate(eventDate, eventTier),
       package: eventTier, // Inherit tier from profile unless explicitly requested
     }).returning();
 

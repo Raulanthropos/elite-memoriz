@@ -12,6 +12,7 @@ export type TierLimits = {
   maxStorageBytes: number;
   maxFileSizeBytes: number;
   aiStoriesEnabled: boolean;
+  retentionMonths: number;
 };
 
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
@@ -21,6 +22,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     maxStorageBytes: 10 * 1024 * 1024 * 1024,
     maxFileSizeBytes: 100 * 1024 * 1024,
     aiStoriesEnabled: false,
+    retentionMonths: 1,
   },
   PREMIUM: {
     maxEvents: 1,
@@ -28,6 +30,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     maxStorageBytes: 50 * 1024 * 1024 * 1024,
     maxFileSizeBytes: 100 * 1024 * 1024,
     aiStoriesEnabled: true,
+    retentionMonths: 3,
   },
   LUXURY: {
     maxEvents: 1,
@@ -35,6 +38,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     maxStorageBytes: 200 * 1024 * 1024 * 1024,
     maxFileSizeBytes: 300 * 1024 * 1024,
     aiStoriesEnabled: true,
+    retentionMonths: 6,
   },
 };
 
@@ -58,4 +62,15 @@ export const parseTier = (value: unknown): Tier | null => {
   }
 
   return TIERS.find((tier) => tier === normalized) ?? null;
+};
+
+export const getTierRetentionMonths = (value: unknown) => {
+  const tier = parseTier(value) ?? 'BASIC';
+  return TIER_LIMITS[tier].retentionMonths;
+};
+
+export const getEventExpirationDate = (eventDate: Date, value: unknown) => {
+  const expiresAt = new Date(eventDate);
+  expiresAt.setMonth(expiresAt.getMonth() + getTierRetentionMonths(value));
+  return expiresAt;
 };

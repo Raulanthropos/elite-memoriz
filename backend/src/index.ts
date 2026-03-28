@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { eventRoutes } from './routes/events';
 import { hostRoutes } from './routes/host';
-import { deleteExpiredEvents } from './services/eventCleanup';
+import { deleteExpiredEvents, syncEventExpirations } from './services/eventCleanup';
 
 dotenv.config();
 
@@ -35,9 +35,12 @@ const EVENT_CLEANUP_TIMEZONE = process.env.EVENT_CLEANUP_TIMEZONE || 'UTC';
 
 const runExpiredEventCleanup = async (reason: 'startup' | 'scheduled') => {
   try {
+    const syncResult = await syncEventExpirations();
     const result = await deleteExpiredEvents();
     console.log('[EVENT_CLEANUP] completed', {
       reason,
+      syncedEventCount: syncResult.updatedCount,
+      checkedEventCount: syncResult.checkedCount,
       checkedAt: result.checkedAt.toISOString(),
       deletedCount: result.deletedCount,
       cleanupFailureCount: result.cleanupFailures.length,

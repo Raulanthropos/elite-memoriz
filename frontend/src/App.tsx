@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateEvent from './pages/CreateEvent';
+import PaymentPlaceholder from './pages/PaymentPlaceholder';
 import EventDetails from './pages/EventDetailsPage';
 import ExitPage from './pages/ExitPage';
 import { GuestEventPage } from './pages/GuestEventPage';
@@ -39,6 +40,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/payment" element={<PaymentPlaceholder />} />
           
           {/* Guest Route */}
           <Route path="/e/:slug" element={<GuestEventPage />} />
@@ -54,11 +56,7 @@ function App() {
           />
           <Route 
             path="/create-event" 
-            element={
-              <ProtectedRoute>
-                <CreateEvent />
-              </ProtectedRoute>
-            } 
+            element={<CreateEvent />} 
           />
           <Route 
             path="/dashboard/event/:id" 

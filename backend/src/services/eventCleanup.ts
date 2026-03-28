@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { db } from '../db';
 import * as schema from '../db/schema';
+import { getEventExpirationDate, parseTier } from '../lib/tiers';
 import { deleteSupabaseUploadFile, StorageService } from './storage';
 
 const isManagedUploadPath = (value: string | null | undefined): value is string => {
@@ -127,5 +128,45 @@ export const deleteExpiredEvents = async (now = new Date()) => {
     checkedAt: now,
     deletedCount,
     cleanupFailures,
+  };
+};
+
+export const syncEventExpirations = async () => {
+  const events = await db.query.events.findMany({
+    where: eq(schema.events.isExpired, false),
+    columns: {
+      id: true,
+      date: true,
+      package: true,
+      expiresAt: true,
+    },
+  });
+
+  let updatedCount = 0;
+
+  for (const event of events) {
+    const tier = parseTier(event.package);
+    if (!tier) {
+      continue;
+    }
+
+    const nextExpiresAt = getEventExpirationDate(event.date, tier);
+    const currentExpiresAtMs = event.expiresAt?.getTime() ?? null;
+    const nextExpiresAtMs = nextExpiresAt.getTime();
+
+    if (currentExpiresAtMs === nextExpiresAtMs) {
+      continue;
+    }
+
+    await db.update(schema.events)
+      .set({ expiresAt: nextExpiresAt })
+      .where(eq(schema.events.id, event.id));
+
+    updatedCount += 1;
+  }
+
+  return {
+    checkedCount: events.length,
+    updatedCount,
   };
 };
