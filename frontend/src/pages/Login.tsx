@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_URL } from '../lib/config';
 
 const Login = () => {
@@ -11,6 +11,13 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedRedirect = searchParams.get('redirect');
+  const redirectPath =
+    requestedRedirect && requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/dashboard';
+  const emailRedirectTo = `${window.location.origin}/login?redirect=${encodeURIComponent(redirectPath)}`;
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +39,7 @@ const Login = () => {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + '/login',
+            emailRedirectTo,
           },
         });
 
@@ -54,7 +61,7 @@ const Login = () => {
              console.error('Profile creation failed, but auth succeeded');
            }
 
-           navigate('/dashboard');
+           navigate(redirectPath, { replace: true });
         } else {
            alert('Check your email for the confirmation link!');
            setIsRegistering(false); // Switch back to login
@@ -70,7 +77,7 @@ const Login = () => {
         if (error) throw error;
 
         if (data.session) {
-          navigate('/dashboard');
+          navigate(redirectPath, { replace: true });
         }
       }
     } catch (err: any) {

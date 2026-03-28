@@ -1,20 +1,22 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, Star, Zap, Crown, Upload, X } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
 import { DEFAULT_COVERS } from '../utils/image'; // FIX: Removed unused 'getEventCoverUrl'
 import { API_URL } from '../lib/config';
-import { TIERS } from '../lib/tiers';
+import { parseTier, TIERS } from '../lib/tiers';
 
 const CreateEvent = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedTier = parseTier(searchParams.get('tier')) ?? 'BASIC';
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     title: '',
     date: '',
     category: 'wedding' as 'wedding' | 'baptism' | 'party' | 'other',
-    package: 'BASIC',
+    package: requestedTier,
     coverImage: '' 
   });
   const [loading, setLoading] = useState(false);
@@ -34,10 +36,16 @@ const CreateEvent = () => {
   ];
 
   const tiers = [
-      { id: TIERS[0], name: 'Basic', price: '€19', icon: <Star size={24} className="text-gray-400"/>, features: ['1 Event', '20 Uploads', '100MB Storage'] },
-      { id: TIERS[1], name: 'Premium', price: '€49', icon: <Zap size={24} className="text-yellow-400"/>, features: ['100 Uploads', '500MB Storage', 'Priority Support'] },
-      { id: TIERS[2], name: 'Luxury', price: '€139', icon: <Crown size={24} className="text-red-400"/>, features: ['Unlimited Uploads', '2GB Storage', 'Dedicated Agent'] },
+      { id: TIERS[0], name: 'Basic', price: '€29', icon: <Star size={24} className="text-gray-400"/>, features: ['One hosted event', 'Up to 100 guests', '10GB cloud storage', '1 month retention'] },
+      { id: TIERS[1], name: 'Premium', price: '€79', icon: <Zap size={24} className="text-yellow-400"/>, features: ['One hosted event', 'Up to 300 guests', '50GB cloud storage', 'AI story generation', '3 months retention'] },
+      { id: TIERS[2], name: 'Luxury', price: '€129', icon: <Crown size={24} className="text-red-400"/>, features: ['One hosted event', 'Up to 500 guests', '200GB cloud storage', 'AI story generation', '360 photo view', '6 months retention'] },
   ];
+
+  useEffect(() => {
+    setFormData((current) => (
+      current.package === requestedTier ? current : { ...current, package: requestedTier }
+    ));
+  }, [requestedTier]);
 
   const nextStep = (e?: React.FormEvent) => {
       e?.preventDefault();
@@ -124,6 +132,7 @@ const CreateEvent = () => {
 
   // Use the new helper to show current selection or default
   const displayPreview = previewUrl || DEFAULT_COVERS[formData.category];
+  const selectedTierName = tiers.find((tier) => tier.id === formData.package)?.name ?? 'Basic';
 
   return (
     <div className="min-h-screen bg-gray-950 p-8 text-white flex items-center justify-center">
@@ -152,6 +161,9 @@ const CreateEvent = () => {
             {step === 1 && (
             <form onSubmit={nextStep} className="space-y-6 animate-in slide-in-from-right duration-300">
                 <h1 className="text-2xl font-bold mb-6">Create New Event</h1>
+                <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-100">
+                    Selected plan: <span className="font-semibold text-white">{selectedTierName}</span>
+                </div>
                 
                 <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Event Name</label>

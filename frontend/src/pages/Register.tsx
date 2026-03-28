@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { API_URL } from '../lib/config';
 
@@ -11,6 +11,13 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedRedirect = searchParams.get('redirect');
+  const redirectPath =
+    requestedRedirect && requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/dashboard';
+  const emailRedirectTo = `${window.location.origin}/login?redirect=${encodeURIComponent(redirectPath)}`;
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +41,7 @@ const Register = () => {
         email,
         password,
         options: {
-          emailRedirectTo: window.location.origin + '/login',
+          emailRedirectTo,
         },
       });
 
@@ -56,11 +63,11 @@ const Register = () => {
             // We can continue, dashboard will auto-create or error.
         }
 
-        navigate('/dashboard');
+        navigate(redirectPath, { replace: true });
       } else {
         // Email confirmation required
         alert('Check your email for the confirmation link!');
-        navigate('/login');
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`, { replace: true });
       }
 
     } catch (err: any) {

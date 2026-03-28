@@ -1,316 +1,521 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Camera, 
-  QrCode, 
-  Download, 
-  ShieldCheck, 
-  Zap, 
-  Users, 
-  Lock, 
-  ArrowRight,
-  CheckCircle2
-} from 'lucide-react';
+import { ArrowRight, Camera, CheckCircle2, Globe, Image, Lock, QrCode, Sparkles, Users } from 'lucide-react';
+import { TIERS, type Tier } from '../lib/tiers';
+
+type Language = 'el' | 'en';
+
+const LANGUAGE_STORAGE_KEY = 'elite-memoriz-language';
+
+const tierMeta: Record<Tier, { price: string; accent: string }> = {
+  BASIC: { price: '€29', accent: 'border-stone-300 bg-white' },
+  PREMIUM: { price: '€79', accent: 'border-emerald-500 bg-emerald-50' },
+  LUXURY: { price: '€129', accent: 'border-amber-400 bg-amber-50' },
+};
+
+const copy = {
+  el: {
+    nav: { how: 'Πως λειτουργεί', plans: 'Πακέτα', login: 'Σύνδεση host' },
+    hero: {
+      badge: 'Χωρίς app για τους καλεσμένους',
+      title: 'Το ιδιωτικό album που γεμίζει',
+      accent: 'ζωντανά από το event',
+      body:
+        'Για γάμους, βαφτίσεις, parties και εταιρικά events. Ο host δίνει ένα QR και συγκεντρώνει όλο το υλικό σε έναν καθαρό χώρο.',
+      primary: 'Συνέχεια με το επιλεγμένο πακέτο',
+      secondary: 'Δες τα πακέτα',
+      selected: 'Επιλεγμένο πακέτο',
+      preview: 'Τι ξεκινά έτοιμο',
+      bullets: ['QR και private link', 'Live gallery για uploads', 'Τελικό download από ένα σημείο'],
+    },
+    promises: [
+      ['Γρήγορο setup', 'Ο host στήνει event, μοιράζεται QR και ξεκινά άμεσα.'],
+      ['Πιο καθαρή εμπειρία', 'Οι φωτογραφίες δεν χάνονται σε chats και inboxes.'],
+      ['Αληθινό product feel', 'Η αρχική σελίδα εξηγεί ξεκάθαρα το flow και τα πακέτα.'],
+    ],
+    stepsTitle: 'Πως λειτουργεί στην πράξη',
+    steps: [
+      ['1. Δημιουργείς event', 'Ορίζεις τίτλο, ημερομηνία, τύπο και πακέτο.'],
+      ['2. Μοιράζεσαι το QR', 'Οι καλεσμένοι μπαίνουν άμεσα από browser, χωρίς download.'],
+      ['3. Μαζεύεις αναμνήσεις', 'Όλο το περιεχόμενο μένει οργανωμένο και διαθέσιμο για download.'],
+    ],
+    experienceTitle: 'Τι πρέπει να νιώθει ο πελάτης',
+    experienceBody:
+      'Το Elite Memoriz πρέπει να δείχνει έτοιμο για χρήση. Η landing page πλέον δίνει καθαρή εικόνα για το αποτέλεσμα, τα όρια κάθε tier και το επόμενο βήμα.',
+    experienceBullets: [
+      'Ιδιωτική πρόσβαση με QR ή direct link',
+      'Προεπιλογή tier από την αρχική σελίδα',
+      'Διαφορετικά όρια σε καλεσμένους, storage και retainment ανά πακέτο',
+    ],
+    pricingTitle: 'Επίλεξε πακέτο και πήγαινε στο Create Event',
+    pricingBody:
+      'Κάθε πακέτο καλύπτει ένα hosted event. Η επιλογή μεταφέρεται στο Create Event ως προεπιλογή και μπορεί να αλλάξει εκεί.',
+    tiers: {
+      BASIC: {
+        name: 'Basic',
+        audience: 'Για ένα πιο μικρό και άμεσο event',
+        description: 'Καθαρή επιλογή για ένα event με όσα χρειάζονται χωρίς περιττή πολυπλοκότητα.',
+        features: ['Έως 100 καλεσμένοι', '10 GB cloud storage', '1 μήνας διατήρησης δεδομένων'],
+        cta: 'Επίλεξε Basic',
+      },
+      PREMIUM: {
+        name: 'Premium',
+        audience: 'Για events με μεγαλύτερη ροή και πιο πλούσιο storytelling',
+        description: 'Η πιο ισορροπημένη επιλογή όταν θέλεις περισσότερο χώρο και AI stories στο ίδιο event.',
+        features: ['Έως 300 καλεσμένοι', '50 GB cloud storage', 'AI stories', '3 μήνες διατήρησης δεδομένων'],
+        cta: 'Επίλεξε Premium',
+      },
+      LUXURY: {
+        name: 'Luxury',
+        audience: 'Για premium παραγωγές και πιο immersive εμπειρία',
+        description: 'Το πιο πλήρες πακέτο, με μεγαλύτερη χωρητικότητα, AI stories και 360 προβολή εικόνας.',
+        features: ['Έως 500 καλεσμένοι', '200 GB cloud storage', 'AI stories', '360° image view', '6 μήνες διατήρησης δεδομένων'],
+        cta: 'Επίλεξε Luxury',
+      },
+    },
+    current: 'Τρέχουσα επιλογή',
+    continueWith: 'Συνέχεια με',
+    faqTitle: 'Πριν ξεκινήσεις',
+    faq: [
+      ['Χρειάζεται app ο καλεσμένος;', 'Όχι. Μπαίνει από QR ή link και ανεβάζει από browser.'],
+      ['Η επιλογή tier εδώ είναι οριστική;', 'Όχι. Μεταφέρεται σαν default στο Create Event και αλλάζει εκεί.'],
+      ['Αν δεν είμαι συνδεδεμένος;', 'Το app σε περνάει από login και επιστρέφει στο σωστό βήμα.'],
+    ],
+    finalTitle: 'Ξεκίνα με πιο καθαρό flow',
+    finalBody: 'Επίλεξε πακέτο, πήγαινε στο Create Event και δώσε στον πελάτη εμπειρία που μοιάζει ολοκληρωμένη.',
+    footer: 'Όλα τα δικαιώματα διατηρούνται.',
+  },
+  en: {
+    nav: { how: 'How it works', plans: 'Plans', login: 'Host sign in' },
+    hero: {
+      badge: 'No app required for guests',
+      title: 'The private album that fills',
+      accent: 'live during the event',
+      body:
+        'Built for weddings, baptisms, parties, and corporate events. The host shares one QR and gathers every memory in one clean space.',
+      primary: 'Continue with the selected plan',
+      secondary: 'View plans',
+      selected: 'Selected plan',
+      preview: 'What starts ready',
+      bullets: ['QR and private link', 'Live gallery for uploads', 'Final download from one place'],
+    },
+    promises: [
+      ['Fast setup', 'The host creates the event, shares the QR, and starts immediately.'],
+      ['Cleaner experience', 'Photos do not get lost across chats and inboxes.'],
+      ['Real product feel', 'The homepage now explains the flow and the plans clearly.'],
+    ],
+    stepsTitle: 'How it works in practice',
+    steps: [
+      ['1. Create the event', 'Set the title, date, event type, and selected tier.'],
+      ['2. Share the QR', 'Guests join instantly from the browser without downloading anything.'],
+      ['3. Collect the memories', 'Everything stays organized and ready for download later.'],
+    ],
+    experienceTitle: 'How the product should feel',
+    experienceBody:
+      'Elite Memoriz should look ready to use. The landing page now gives a clearer view of the result, the limits of each tier, and the next step.',
+    experienceBullets: [
+      'Private access through QR or direct link',
+      'Homepage tier selection prefilled in Create Event',
+      'Different guest, storage, and retention limits across plans',
+    ],
+    pricingTitle: 'Pick a plan and move into Create Event',
+    pricingBody:
+      'Every plan covers one hosted event. Your choice is carried into Create Event as the default selection, and the user can still change it there.',
+    tiers: {
+      BASIC: {
+        name: 'Basic',
+        audience: 'For a smaller, straightforward event',
+        description: 'A clean choice for one event with the essentials covered.',
+        features: ['Up to 100 guests', '10 GB cloud storage', '1 month data retention'],
+        cta: 'Choose Basic',
+      },
+      PREMIUM: {
+        name: 'Premium',
+        audience: 'For larger events with stronger storytelling needs',
+        description: 'The most balanced choice for one event with more room, more storage, and AI stories.',
+        features: ['Up to 300 guests', '50 GB cloud storage', 'AI stories', '3 months data retention'],
+        cta: 'Choose Premium',
+      },
+      LUXURY: {
+        name: 'Luxury',
+        audience: 'For premium productions and immersive delivery',
+        description: 'The fullest package for one event, with the highest capacity and 360 image viewing.',
+        features: ['Up to 500 guests', '200 GB cloud storage', 'AI stories', '360° image view', '6 months data retention'],
+        cta: 'Choose Luxury',
+      },
+    },
+    current: 'Current selection',
+    continueWith: 'Continue with',
+    faqTitle: 'Before you begin',
+    faq: [
+      ['Do guests need an app?', 'No. They join through a QR code or link and upload from the browser.'],
+      ['Is the tier choice final here?', 'No. It is passed into Create Event as the default and can be changed there.'],
+      ['What if I am not signed in?', 'The app routes you through login and sends you back to the right step.'],
+    ],
+    finalTitle: 'Start with a clearer flow',
+    finalBody: 'Pick a plan, move into Create Event, and give the client a product experience that feels intentional.',
+    footer: 'All rights reserved.',
+  },
+} as const;
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window === 'undefined') return 'el';
+    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'el';
+  });
+  const [selectedTier, setSelectedTier] = useState<Tier>('PREMIUM');
+
+  useEffect(() => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  }, [language]);
+
+  const pageCopy = copy[language];
+  const selectedTierCopy = pageCopy.tiers[selectedTier];
 
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const continueWithTier = (tier: Tier) => {
+    navigate(`/create-event?tier=${encodeURIComponent(tier)}`);
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-indigo-100">
-      
-      {/* --- HERO SECTION --- */}
-      <section className="relative overflow-hidden pt-24 pb-32 lg:pt-32 lg:pb-40 bg-gradient-to-b from-indigo-50/50 to-white">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
-            <div className="absolute top-20 left-10 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl mix-blend-multiply opacity-70 animate-pulse"></div>
-            <div className="absolute top-40 right-10 w-80 h-80 bg-purple-200/40 rounded-full blur-3xl mix-blend-multiply opacity-70"></div>
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-semibold mb-8 shadow-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-            </span>
-            No App Required
+    <div className="min-h-screen bg-[#f7f2e8] text-stone-900 selection:bg-amber-200">
+      <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[#f7f2e8]/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-900/70">Elite Memoriz</p>
+            <p className="text-lg font-semibold text-stone-900">Private event memories</p>
           </div>
-          
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900 mb-6 drop-shadow-sm">
-            Every Event Deserves Its Own <br className="hidden md:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-              Digital Memory Space
-            </span>
-          </h1>
-          
-          <p className="max-w-2xl mx-auto text-xl text-gray-600 mb-10 leading-relaxed">
-            The private, instant photo feed for your wedding, party, or corporate event. 
-            Guests scan a QR code and photos appear instantly.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button 
-              onClick={() => navigate('/login')}
-              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-600/20 active:scale-[0.98] transition-all w-full sm:w-auto flex items-center justify-center gap-2"
-            >
-              Create Your Event
-              <ArrowRight size={20} />
+
+          <div className="hidden items-center gap-8 text-sm font-medium text-stone-600 lg:flex">
+            <button type="button" onClick={() => scrollToSection('how-it-works')} className="hover:text-stone-950">
+              {pageCopy.nav.how}
             </button>
-            <button 
-              onClick={() => scrollToSection('how-it-works')}
-              className="px-8 py-4 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 shadow-sm rounded-2xl font-semibold text-lg active:scale-[0.98] transition-all w-full sm:w-auto"
-            >
-              How it Works
+            <button type="button" onClick={() => scrollToSection('pricing')} className="hover:text-stone-950">
+              {pageCopy.nav.plans}
             </button>
           </div>
 
-          {/* Hero Visual Mockup */}
-          <div className="mt-20 relative mx-auto max-w-4xl">
-             <div className="relative rounded-3xl bg-white p-3 shadow-2xl border border-gray-100/50">
-                <div className="rounded-2xl overflow-hidden bg-gray-50 aspect-video flex items-center justify-center relative border border-gray-100">
-                    <div className="text-center">
-                        <Camera size={64} className="mx-auto text-gray-300 mb-4" />
-                        <p className="text-gray-400 font-mono text-sm tracking-widest uppercase">Real-time Photo Feed</p>
-                    </div>
-                     {/* Floating Elements */}
-                    <div className="absolute -left-6 top-10 bg-white p-4 rounded-xl shadow-2xl border border-gray-100 flex items-center gap-4 animate-bounce">
-                        <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-green-600 border border-green-100">
-                            <QrCode size={24} />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-xs text-gray-500 font-medium">Scan QR</p>
-                            <p className="text-sm font-bold text-gray-900">Instant Access</p>
-                        </div>
-                    </div>
-                </div>
-             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* --- HOW IT WORKS --- */}
-      <section id="how-it-works" className="py-24 bg-gray-50 relative border-t border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-16">
-                  <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Simple as 1-2-3</h2>
-                  <p className="text-lg text-gray-600">No downloads, no logins for guests. Just pure memories.</p>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-12">
-                  {/* Step 1 */}
-                  <div className="relative text-center group">
-                      <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mx-auto mb-6 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 border border-indigo-100 shadow-sm">
-                          <Zap size={32} />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">1. Host Creates Event</h3>
-                      <p className="text-gray-600 leading-relaxed">
-                          Sign up in seconds. Set your event name, date, and customize your welcome message.
-                      </p>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className="relative text-center group">
-                      <div className="w-20 h-20 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mx-auto mb-6 group-hover:scale-110 group-hover:bg-purple-600 group-hover:text-white transition-all duration-300 border border-purple-100 shadow-sm">
-                          <QrCode size={32} />
-                      </div>
-                      <div className="hidden md:block absolute top-10 -left-1/2 w-full border-t-2 border-dashed border-gray-200 -z-10"></div>
-                      <div className="hidden md:block absolute top-10 -right-1/2 w-full border-t-2 border-dashed border-gray-200 -z-10"></div>
-                      
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">2. Guests Scan QR</h3>
-                      <p className="text-gray-600 leading-relaxed">
-                          Print your unique QR code on table cards. Guests scan and upload without installing an app.
-                      </p>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div className="relative text-center group">
-                      <div className="w-20 h-20 bg-pink-50 rounded-2xl flex items-center justify-center text-pink-600 mx-auto mb-6 group-hover:scale-110 group-hover:bg-pink-600 group-hover:text-white transition-all duration-300 border border-pink-100 shadow-sm">
-                          <Camera size={32} />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">3. Watch Real-time</h3>
-                      <p className="text-gray-600 leading-relaxed">
-                          Photos appear instantly on the live feed. Download everything in a zip file later.
-                      </p>
-                  </div>
-              </div>
-          </div>
-      </section>
-
-      {/* --- FEATURES GRID --- */}
-      <section className="py-24 bg-white relative">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-                  <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-lg shadow-gray-100/50 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl transition-all">
-                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-6">
-                        <QrCode size={24} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Instant QR Access</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">Every event gets a dedicated QR code and unique link.</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-lg shadow-gray-100/50 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl transition-all">
-                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-6">
-                        <Lock size={24} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Private Feed</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">Your memories are safe. Only people heavily with the link can view.</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-lg shadow-gray-100/50 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl transition-all">
-                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-6">
-                        <Download size={24} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Bulk Zip Download</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">Events over? Download all high-res photos in one click.</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-lg shadow-gray-100/50 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl transition-all">
-                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-6">
-                        <ShieldCheck size={24} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Host Moderation</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">You have full control. Approve or delete photos instantly.</p>
-                  </div>
-              </div>
-          </div>
-      </section>
-
-      {/* --- USE CASES --- */}
-      <section className="py-24 bg-gray-50 border-y border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <h2 className="text-4xl font-extrabold text-gray-900 text-center mb-16">Perfect For Any Occasion</h2>
-              <div className="grid md:grid-cols-2 gap-8">
-                  <div className="relative group overflow-hidden rounded-3xl shadow-xl aspect-video lg:aspect-[21/9]">
-                      <img 
-                        src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=2000" 
-                        alt="Wedding" 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent flex items-end p-8">
-                          <div>
-                              <h3 className="text-2xl font-bold text-white mb-2">Weddings</h3>
-                              <p className="text-gray-200">Capture every candid moment from your guests' perspective.</p>
-                          </div>
-                      </div>
-                  </div>
-                  <div className="relative group overflow-hidden rounded-3xl shadow-xl aspect-video lg:aspect-[21/9]">
-                      <img 
-                        src="https://images.unsplash.com/photo-1533174072545-e8d4aa97edf9?auto=format&fit=crop&q=80&w=2000" 
-                        alt="Party" 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent flex items-end p-8">
-                          <div>
-                              <h3 className="text-2xl font-bold text-white mb-2">Corporate & Parties</h3>
-                              <p className="text-gray-200">Engage attendees with a live photo wall.</p>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      </section>
-
-      {/* --- PRICING --- */}
-      <section className="py-24 bg-white relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-4xl font-extrabold text-gray-900 text-center mb-4">Simple Pricing</h2>
-            <p className="text-lg text-gray-600 text-center mb-16">Choose the plan that fits your event duration.</p>
-
-            <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                {/* Basic */}
-                <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col hover:shadow-lg transition-shadow">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Basic</h3>
-                    <div className="text-4xl font-extrabold text-gray-900 mb-6">€19<span className="text-base text-gray-500 font-normal"> / event</span></div>
-                    <ul className="space-y-4 mb-8 flex-grow">
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 1 Month Access
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Up to 100 Guests
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Standard Resolution
-                        </li>
-                    </ul>
-                    <button className="w-full py-3.5 rounded-xl border-2 border-gray-200 text-gray-700 font-bold hover:border-gray-300 hover:bg-gray-50 transition-colors">
-                        Select Basic
-                    </button>
-                </div>
-
-                {/* Premium */}
-                <div className="bg-white rounded-3xl p-8 border-2 border-indigo-500 relative flex flex-col shadow-2xl shadow-indigo-100 transform md:-translate-y-4">
-                    <div className="absolute top-0 right-8 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-b-lg">
-                        POPULAR
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Premium</h3>
-                    <div className="text-4xl font-extrabold text-indigo-600 mb-6">€49<span className="text-base text-gray-500 font-normal"> / event</span></div>
-                    <ul className="space-y-4 mb-8 flex-grow">
-                        <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 3 Months Access
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Unlimited Guests
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> High-Res Downloads
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-700 text-sm font-medium">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Live Slideshow Mode
-                        </li>
-                    </ul>
-                    <button 
-                        onClick={() => navigate('/login')}
-                        className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                    >
-                        Get Started
-                    </button>
-                </div>
-
-                {/* LUXURY */}
-                <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col hover:shadow-lg transition-shadow">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Luxury</h3>
-                    <div className="text-4xl font-extrabold text-gray-900 mb-6">€139<span className="text-base text-gray-500 font-normal"> / event</span></div>
-                    <ul className="space-y-4 mb-8 flex-grow">
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> 6 Months Access
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Everything in Premium
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> AI Video Montage
-                        </li>
-                        <li className="flex items-center gap-3 text-gray-600 text-sm">
-                            <CheckCircle2 size={20} className="text-indigo-500 flex-shrink-0" /> Priority Support
-                        </li>
-                    </ul>
-                    <button className="w-full py-3.5 rounded-xl border-2 border-gray-200 text-gray-700 font-bold hover:border-gray-300 hover:bg-gray-50 transition-colors">
-                        Contact Sales
-                    </button>
-                </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setLanguage('el')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${language === 'el' ? 'bg-stone-950 text-white' : 'text-stone-600'}`}
+              >
+                EL
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${language === 'en' ? 'bg-stone-950 text-white' : 'text-stone-600'}`}
+              >
+                EN
+              </button>
             </div>
-        </div>
-      </section>
-
-      {/* --- TRUST --- */}
-      <section className="py-16 bg-gray-900 mt-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8">
-              <div className="text-center md:text-left">
-                  <h4 className="font-bold text-xl text-white mb-2">Secure & Private</h4>
-                  <p className="text-gray-400">We use enterprise-grade encryption to protect your memories.</p>
-              </div>
-              <div className="flex gap-8 text-gray-400 font-medium">
-                  <span className="flex items-center gap-2"><Lock size={20} className="text-indigo-400"/> Secure Cloud</span>
-                  <span className="flex items-center gap-2"><Users size={20} className="text-indigo-400"/> Guest Anonymity</span>
-              </div>
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="hidden rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 sm:inline-flex"
+            >
+              {pageCopy.nav.login}
+            </button>
           </div>
-      </section>
+        </div>
+      </header>
 
-      {/* --- FOOTER --- */}
-      <footer className="py-8 bg-gray-950 text-center text-gray-500 text-sm">
-          <p>&copy; {new Date().getFullYear()} Elite Memoriz. All rights reserved.</p>
+      <main>
+        <section className="mx-auto grid max-w-7xl gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pt-24">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 shadow-sm">
+              <Globe size={16} />
+              {pageCopy.hero.badge}
+            </div>
+            <h1 className="mt-6 text-5xl font-semibold leading-tight tracking-tight text-stone-950 md:text-7xl">
+              {pageCopy.hero.title} <span className="text-emerald-900">{pageCopy.hero.accent}</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">{pageCopy.hero.body}</p>
+
+            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => continueWithTier(selectedTier)}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-stone-950/15"
+              >
+                {pageCopy.hero.primary}
+                <ArrowRight size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection('pricing')}
+                className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-7 py-4 text-base font-semibold text-stone-800"
+              >
+                {pageCopy.hero.secondary}
+              </button>
+            </div>
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {pageCopy.promises.map(([title, description], index) => {
+                const Icon = [Sparkles, Camera, Image][index];
+                return (
+                  <div key={title} className="rounded-3xl border border-stone-200 bg-white p-5 shadow-lg shadow-stone-200/40">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-950 text-white">
+                      <Icon size={20} />
+                    </div>
+                    <h2 className="mt-4 text-base font-semibold text-stone-950">{title}</h2>
+                    <p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-[0_28px_80px_rgba(41,37,36,0.12)]">
+            <div className="rounded-[1.75rem] bg-[#17332c] p-6 text-white">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-100/80">
+                    {pageCopy.hero.selected}
+                  </p>
+                  <h2 className="mt-3 text-3xl font-semibold">
+                    {selectedTierCopy.name} • {tierMeta[selectedTier].price}
+                  </h2>
+                </div>
+                <div className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-emerald-50">
+                  Elite flow
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-[1fr_0.95fr]">
+                <div className="rounded-[1.5rem] bg-white/10 p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#17332c]">
+                      <QrCode size={24} />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">{pageCopy.hero.preview}</p>
+                      <p className="mt-1 text-sm text-emerald-50">{selectedTierCopy.audience}</p>
+                    </div>
+                  </div>
+
+                  <ul className="mt-5 space-y-3">
+                    {pageCopy.hero.bullets.map((bullet) => (
+                      <li key={bullet} className="flex items-center gap-3 text-sm text-emerald-50">
+                        <CheckCircle2 size={16} className="shrink-0 text-amber-300" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-[1.5rem] bg-[#f7f2e8] p-5 text-stone-900">
+                  <p className="text-sm font-semibold text-stone-500">{pageCopy.current}</p>
+                  <p className="mt-2 text-2xl font-semibold text-stone-950">{selectedTierCopy.name}</p>
+                  <ul className="mt-4 space-y-3">
+                    {selectedTierCopy.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-3 text-sm text-stone-700">
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-700" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => continueWithTier(selectedTier)}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white"
+                  >
+                    {pageCopy.continueWith} {selectedTierCopy.name}
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="border-y border-stone-200 bg-white py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.stepsTitle}</h2>
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {pageCopy.steps.map(([title, description], index) => {
+                const Icon = [Sparkles, QrCode, Camera][index];
+                return (
+                  <div key={title} className="rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-8 shadow-lg shadow-stone-200/40">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-950 text-white">
+                      <Icon size={24} />
+                    </div>
+                    <h3 className="mt-6 text-2xl font-semibold text-stone-950">{title}</h3>
+                    <p className="mt-3 text-base leading-7 text-stone-600">{description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-[#efe5d3] py-24">
+          <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8">
+            <div className="rounded-[2rem] bg-stone-950 p-8 text-white shadow-2xl shadow-stone-950/15">
+              <h2 className="text-4xl font-semibold tracking-tight">{pageCopy.experienceTitle}</h2>
+              <p className="mt-4 text-base leading-7 text-stone-300">{pageCopy.experienceBody}</p>
+              <div className="mt-8 space-y-4">
+                {pageCopy.experienceBullets.map((bullet) => (
+                  <div key={bullet} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 size={18} className="mt-1 shrink-0 text-amber-300" />
+                      <p className="text-sm leading-6 text-stone-200">{bullet}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              {[
+                ['Private access', Lock],
+                ['Host-first control', Users],
+                ['Live gallery', Image],
+                ['Clear plan choice', Sparkles],
+              ].map(([fallbackTitle, Icon], index) => {
+                const title = pageCopy.promises[index]?.[0] ?? fallbackTitle;
+                const description = pageCopy.promises[index]?.[1] ?? '';
+                const CardIcon = Icon as typeof Lock;
+                return (
+                  <div key={title} className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-lg shadow-stone-200/40">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-900">
+                      <CardIcon size={20} />
+                    </div>
+                    <h3 className="mt-5 text-xl font-semibold text-stone-900">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-stone-600">{description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="bg-white py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.pricingTitle}</h2>
+              <p className="mt-4 text-lg leading-8 text-stone-600">{pageCopy.pricingBody}</p>
+            </div>
+
+            <div className="mt-14 grid gap-6 xl:grid-cols-3">
+              {TIERS.map((tier) => {
+                const tierCopy = pageCopy.tiers[tier];
+                const isSelected = selectedTier === tier;
+                return (
+                  <article
+                    key={tier}
+                    onClick={() => setSelectedTier(tier)}
+                    className={`cursor-pointer rounded-[2rem] border p-8 shadow-lg transition-all ${
+                      isSelected ? 'border-stone-950 bg-stone-950 text-white shadow-stone-950/15' : `${tierMeta[tier].accent} text-stone-900 shadow-stone-200/40`
+                    }`}
+                  >
+                    <h3 className="text-3xl font-semibold">{tierCopy.name}</h3>
+                    <p className={`mt-2 text-sm ${isSelected ? 'text-stone-300' : 'text-stone-600'}`}>{tierCopy.audience}</p>
+                    <div className="mt-8 flex items-end gap-2">
+                      <span className="text-5xl font-semibold">{tierMeta[tier].price}</span>
+                      <span className={`pb-2 text-sm ${isSelected ? 'text-stone-300' : 'text-stone-500'}`}>/ event</span>
+                    </div>
+                    <p className={`mt-4 text-sm leading-6 ${isSelected ? 'text-stone-300' : 'text-stone-600'}`}>{tierCopy.description}</p>
+
+                    <ul className="mt-8 space-y-4">
+                      {tierCopy.features.map((feature) => (
+                        <li key={feature} className="flex items-center gap-3 text-sm">
+                          <CheckCircle2 size={18} className={isSelected ? 'shrink-0 text-amber-300' : 'shrink-0 text-emerald-700'} />
+                          <span className={isSelected ? 'text-stone-100' : 'text-stone-700'}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        continueWithTier(tier);
+                      }}
+                      className={`mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold ${
+                        isSelected ? 'bg-white text-stone-950' : 'bg-stone-950 text-white'
+                      }`}
+                    >
+                      {tierCopy.cta}
+                      <ArrowRight size={16} />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="mt-10 rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-6 shadow-sm">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.25em] text-stone-500">{pageCopy.current}</p>
+                  <h3 className="mt-2 text-2xl font-semibold text-stone-950">
+                    {selectedTierCopy.name} • {tierMeta[selectedTier].price}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => continueWithTier(selectedTier)}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-6 py-3.5 text-sm font-semibold text-white"
+                >
+                  {pageCopy.continueWith} {selectedTierCopy.name}
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-stone-200 bg-[#17332c] py-24 text-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">{pageCopy.faqTitle}</h2>
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {pageCopy.faq.map(([question, answer]) => (
+                <article key={question} className="rounded-[1.75rem] border border-white/10 bg-white/5 p-6">
+                  <h3 className="text-xl font-semibold text-white">{question}</h3>
+                  <p className="mt-3 text-sm leading-7 text-stone-300">{answer}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-24">
+          <div className="mx-auto max-w-5xl rounded-[2.5rem] bg-[#efe5d3] px-6 py-12 text-center shadow-xl shadow-stone-200/50 sm:px-12">
+            <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.finalTitle}</h2>
+            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-stone-700">{pageCopy.finalBody}</p>
+            <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => continueWithTier(selectedTier)}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white"
+              >
+                {pageCopy.continueWith} {selectedTierCopy.name}
+                <ArrowRight size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-7 py-4 text-base font-semibold text-stone-800"
+              >
+                {pageCopy.nav.login}
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="bg-stone-950 py-8 text-center text-sm text-stone-400">
+        <p>
+          &copy; {new Date().getFullYear()} Elite Memoriz. {pageCopy.footer}
+        </p>
       </footer>
     </div>
   );
