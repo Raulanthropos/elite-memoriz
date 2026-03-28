@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Camera, CheckCircle2, Globe, Image, Lock, QrCode, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, Camera, CheckCircle2, CreditCard, Globe, Image, Lock, QrCode, Sparkles, UserRoundPlus, Users } from 'lucide-react';
 import { TIERS, type Tier } from '../lib/tiers';
 
 type Language = 'el' | 'en';
@@ -22,9 +22,9 @@ const copy = {
       accent: 'ζωντανά από το event',
       body:
         'Για γάμους, βαφτίσεις, parties και εταιρικά events. Ο host δίνει ένα QR και συγκεντρώνει όλο το υλικό σε έναν καθαρό χώρο.',
-      primary: 'Συνέχεια με το επιλεγμένο πακέτο',
+      primary: 'Ξεκίνα τη δημιουργία event',
       secondary: 'Δες τα πακέτα',
-      selected: 'Επιλεγμένο πακέτο',
+      selected: 'Προεπισκόπηση πακέτου',
       preview: 'Τι ξεκινά έτοιμο',
       bullets: ['QR και private link', 'Live gallery για uploads', 'Τελικό download από ένα σημείο'],
     },
@@ -35,54 +35,55 @@ const copy = {
     ],
     stepsTitle: 'Πως λειτουργεί στην πράξη',
     steps: [
-      ['1. Δημιουργείς event', 'Ορίζεις τίτλο, ημερομηνία, τύπο και πακέτο.'],
-      ['2. Μοιράζεσαι το QR', 'Οι καλεσμένοι μπαίνουν άμεσα από browser, χωρίς download.'],
-      ['3. Μαζεύεις αναμνήσεις', 'Όλο το περιεχόμενο μένει οργανωμένο και διαθέσιμο για download.'],
+      ['1. Συμπληρώνεις τα στοιχεία', 'Ορίζεις τίτλο, ημερομηνία και τύπο event.'],
+      ['2. Επιλέγεις πακέτο', 'Βλέπεις τα διαθέσιμα tiers μέσα στη φόρμα και διαλέγεις αυτό που θέλεις.'],
+      ['3. Δημιουργείς host account', 'Ο επισκέπτης προχωρά σε registration για να συνεχίσει το hosting flow.'],
+      ['4. Προχωράς σε payment', 'Το payment step ακολουθεί αμέσως μετά και έπειτα γίνεται η τελική ενεργοποίηση.'],
     ],
     experienceTitle: 'Τι πρέπει να νιώθει ο πελάτης',
     experienceBody:
       'Το Elite Memoriz πρέπει να δείχνει έτοιμο για χρήση. Η landing page πλέον δίνει καθαρή εικόνα για το αποτέλεσμα, τα όρια κάθε tier και το επόμενο βήμα.',
     experienceBullets: [
       'Ιδιωτική πρόσβαση με QR ή direct link',
-      'Προεπιλογή tier από την αρχική σελίδα',
+      'Preview των πακέτων στην αρχική και τελική επιλογή μέσα στο Create Event',
       'Διαφορετικά όρια σε καλεσμένους, storage και διάρκεια διατήρησης ανά πακέτο',
     ],
-    pricingTitle: 'Επίλεξε πακέτο και πήγαινε στο Create Event',
+    pricingTitle: 'Δες τα πακέτα και συνέχισε στο Create Event',
     pricingBody:
-      'Κάθε πακέτο καλύπτει ένα hosted event. Η επιλογή μεταφέρεται στο Create Event ως προεπιλογή και μπορεί να αλλάξει εκεί.',
+      'Κάθε πακέτο καλύπτει ένα hosted event. Εδώ βλέπεις τις διαφορές των tiers και μέσα στο Create Event κάνεις την τελική επιλογή.',
     tiers: {
       BASIC: {
         name: 'Basic',
         audience: 'Για ένα πιο μικρό και άμεσο event',
         description: 'Καθαρή επιλογή για ένα event με όσα χρειάζονται χωρίς περιττή πολυπλοκότητα.',
         features: ['Έως 100 καλεσμένοι', '10 GB cloud storage', 'Διατήρηση δεδομένων για 1 μήνα'],
-        cta: 'Επίλεξε Basic',
+        cta: 'Συνέχεια στη φόρμα',
       },
       PREMIUM: {
         name: 'Premium',
         audience: 'Για events με μεγαλύτερη ροή και πιο πλούσιο storytelling',
         description: 'Η πιο ισορροπημένη επιλογή όταν θέλεις περισσότερο χώρο και AI stories στο ίδιο event.',
         features: ['Έως 300 καλεσμένοι', '50 GB cloud storage', 'AI stories', 'Διατήρηση δεδομένων για 3 μήνες'],
-        cta: 'Επίλεξε Premium',
+        cta: 'Συνέχεια στη φόρμα',
       },
       LUXURY: {
         name: 'Luxury',
         audience: 'Για premium παραγωγές και πιο immersive εμπειρία',
         description: 'Το πιο πλήρες πακέτο, με μεγαλύτερη χωρητικότητα, AI stories και 360 προβολή εικόνας.',
         features: ['Έως 500 καλεσμένοι', '200 GB cloud storage', 'AI stories', '360° image view', 'Διατήρηση δεδομένων για 6 μήνες'],
-        cta: 'Επίλεξε Luxury',
+        cta: 'Συνέχεια στη φόρμα',
       },
     },
-    current: 'Τρέχουσα επιλογή',
-    continueWith: 'Συνέχεια με',
+    current: 'Τρέχουσα προεπισκόπηση',
+    continueWith: 'Συνέχεια στη φόρμα',
     faqTitle: 'Πριν ξεκινήσεις',
     faq: [
       ['Χρειάζεται app ο καλεσμένος;', 'Όχι. Μπαίνει από QR ή link και ανεβάζει από browser.'],
-      ['Η επιλογή tier εδώ είναι οριστική;', 'Όχι. Μεταφέρεται σαν default στο Create Event και αλλάζει εκεί.'],
-      ['Αν δεν είμαι συνδεδεμένος;', 'Το app σε περνάει από login και επιστρέφει στο σωστό βήμα.'],
+      ['Η επιλογή tier εδώ είναι οριστική;', 'Όχι. Εδώ βλέπεις τα πακέτα και η τελική επιλογή γίνεται μέσα στο Create Event.'],
+      ['Αν δεν είμαι συνδεδεμένος;', 'Συμπληρώνεις τα στοιχεία, διαλέγεις πακέτο, κάνεις host registration και μετά προχωράς στο payment βήμα.'],
     ],
     finalTitle: 'Ξεκίνα με πιο καθαρό flow',
-    finalBody: 'Επίλεξε πακέτο, πήγαινε στο Create Event και δώσε στον πελάτη εμπειρία που μοιάζει ολοκληρωμένη.',
+    finalBody: 'Δες τα tiers, μπες στο Create Event και οδήγησε τον επισκέπτη σε μια καθαρή διαδρομή: στοιχεία, πακέτο, registration και payment.',
     footer: 'Όλα τα δικαιώματα διατηρούνται.',
   },
   en: {
@@ -93,9 +94,9 @@ const copy = {
       accent: 'live during the event',
       body:
         'Built for weddings, baptisms, parties, and corporate events. The host shares one QR and gathers every memory in one clean space.',
-      primary: 'Continue with the selected plan',
+      primary: 'Start event setup',
       secondary: 'View plans',
-      selected: 'Selected plan',
+      selected: 'Plan preview',
       preview: 'What starts ready',
       bullets: ['QR and private link', 'Live gallery for uploads', 'Final download from one place'],
     },
@@ -106,54 +107,55 @@ const copy = {
     ],
     stepsTitle: 'How it works in practice',
     steps: [
-      ['1. Create the event', 'Set the title, date, event type, and selected tier.'],
-      ['2. Share the QR', 'Guests join instantly from the browser without downloading anything.'],
-      ['3. Collect the memories', 'Everything stays organized and ready for download later.'],
+      ['1. Fill in the details', 'Set the title, date, and type of event.'],
+      ['2. Choose the plan', 'Review the available tiers inside the form and pick the one that fits best.'],
+      ['3. Create the host account', 'The visitor moves into registration to continue the hosting flow.'],
+      ['4. Continue to payment', 'Payment comes next, followed by the final activation step.'],
     ],
     experienceTitle: 'How the product should feel',
     experienceBody:
       'Elite Memoriz should look ready to use. The landing page now gives a clearer view of the result, the limits of each tier, and the next step.',
     experienceBullets: [
       'Private access through QR or direct link',
-      'Homepage tier selection prefilled in Create Event',
+      'Plan previews on the homepage, with the final choice made inside Create Event',
       'Different guest, storage, and retention limits across plans',
     ],
-    pricingTitle: 'Pick a plan and move into Create Event',
+    pricingTitle: 'Review the plans and continue into Create Event',
     pricingBody:
-      'Every plan covers one hosted event. Your choice is carried into Create Event as the default selection, and the user can still change it there.',
+      'Every plan covers one hosted event. The homepage helps users compare the tiers, and the final plan choice happens inside Create Event.',
     tiers: {
       BASIC: {
         name: 'Basic',
         audience: 'For a smaller, straightforward event',
         description: 'A clean choice for one event with the essentials covered.',
         features: ['Up to 100 guests', '10 GB cloud storage', '1 month data retention'],
-        cta: 'Choose Basic',
+        cta: 'Continue to the form',
       },
       PREMIUM: {
         name: 'Premium',
         audience: 'For larger events with stronger storytelling needs',
         description: 'The most balanced choice for one event with more room, more storage, and AI stories.',
         features: ['Up to 300 guests', '50 GB cloud storage', 'AI stories', '3 months data retention'],
-        cta: 'Choose Premium',
+        cta: 'Continue to the form',
       },
       LUXURY: {
         name: 'Luxury',
         audience: 'For premium productions and immersive delivery',
         description: 'The fullest package for one event, with the highest capacity and 360 image viewing.',
         features: ['Up to 500 guests', '200 GB cloud storage', 'AI stories', '360° image view', '6 months data retention'],
-        cta: 'Choose Luxury',
+        cta: 'Continue to the form',
       },
     },
-    current: 'Current selection',
-    continueWith: 'Continue with',
+    current: 'Current preview',
+    continueWith: 'Continue to the form',
     faqTitle: 'Before you begin',
     faq: [
       ['Do guests need an app?', 'No. They join through a QR code or link and upload from the browser.'],
-      ['Is the tier choice final here?', 'No. It is passed into Create Event as the default and can be changed there.'],
-      ['What if I am not signed in?', 'The app routes you through login and sends you back to the right step.'],
+      ['Is the plan choice final here?', 'No. The homepage is for comparison, and the final plan choice happens inside Create Event.'],
+      ['What if I am not signed in?', 'The visitor fills in the event details, chooses a plan, creates a host account, and then continues to payment.'],
     ],
     finalTitle: 'Start with a clearer flow',
-    finalBody: 'Pick a plan, move into Create Event, and give the client a product experience that feels intentional.',
+    finalBody: 'Review the tiers, enter Create Event, and guide the visitor through one clear path: details, plan, registration, and payment.',
     footer: 'All rights reserved.',
   },
 } as const;
@@ -178,8 +180,8 @@ const LandingPage = () => {
     if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const continueWithTier = (tier: Tier) => {
-    navigate(`/create-event?tier=${encodeURIComponent(tier)}`);
+  const continueToCreateEvent = () => {
+    navigate('/create-event');
   };
 
   return (
@@ -243,7 +245,7 @@ const LandingPage = () => {
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <button
                 type="button"
-                onClick={() => continueWithTier(selectedTier)}
+                onClick={continueToCreateEvent}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-stone-950/15"
               >
                 {pageCopy.hero.primary}
@@ -325,10 +327,10 @@ const LandingPage = () => {
                   </ul>
                   <button
                     type="button"
-                    onClick={() => continueWithTier(selectedTier)}
+                    onClick={continueToCreateEvent}
                     className="mt-5 inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white"
                   >
-                    {pageCopy.continueWith} {selectedTierCopy.name}
+                    {pageCopy.continueWith}
                     <ArrowRight size={16} />
                   </button>
                 </div>
@@ -342,7 +344,7 @@ const LandingPage = () => {
             <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.stepsTitle}</h2>
             <div className="mt-12 grid gap-6 lg:grid-cols-3">
               {pageCopy.steps.map(([title, description], index) => {
-                const Icon = [Sparkles, QrCode, Camera][index];
+                const Icon = [Sparkles, CheckCircle2, UserRoundPlus, CreditCard][index];
                 return (
                   <div key={title} className="rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-8 shadow-lg shadow-stone-200/40">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-950 text-white">
@@ -438,7 +440,7 @@ const LandingPage = () => {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        continueWithTier(tier);
+                        continueToCreateEvent();
                       }}
                       className={`mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold ${
                         isSelected ? 'bg-white text-stone-950' : 'bg-stone-950 text-white'
@@ -462,10 +464,10 @@ const LandingPage = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => continueWithTier(selectedTier)}
+                  onClick={continueToCreateEvent}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-6 py-3.5 text-sm font-semibold text-white"
                 >
-                  {pageCopy.continueWith} {selectedTierCopy.name}
+                  {pageCopy.continueWith}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -494,10 +496,10 @@ const LandingPage = () => {
             <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
               <button
                 type="button"
-                onClick={() => continueWithTier(selectedTier)}
+                onClick={continueToCreateEvent}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white"
               >
-                {pageCopy.continueWith} {selectedTierCopy.name}
+                {pageCopy.continueWith}
                 <ArrowRight size={18} />
               </button>
               <button

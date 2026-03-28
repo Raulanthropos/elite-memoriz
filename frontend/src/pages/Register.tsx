@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { API_URL } from '../lib/config';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
+import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 
 const copy = {
   el: {
@@ -18,7 +19,14 @@ const copy = {
     signInPrompt: 'Έχεις ήδη λογαριασμό;',
     signIn: 'Σύνδεση',
     mismatch: 'Οι κωδικοί δεν ταιριάζουν',
-    shortPassword: 'Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες',
+    weakPassword: 'Ο κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες, 1 κεφαλαίο γράμμα, 1 αριθμό και 1 σύμβολο.',
+    passwordHint: 'Ο κωδικός σου πρέπει να πληροί όλα τα παρακάτω:',
+    requirements: {
+      minLength: 'Τουλάχιστον 8 χαρακτήρες',
+      uppercase: 'Τουλάχιστον 1 κεφαλαίο γράμμα',
+      number: 'Τουλάχιστον 1 αριθμό',
+      symbol: 'Τουλάχιστον 1 σύμβολο',
+    } as Record<PasswordRequirementKey, string>,
     checkEmail: 'Έλεγξε το email σου για το confirmation link.',
   },
   en: {
@@ -32,7 +40,14 @@ const copy = {
     signInPrompt: 'Already have an account?',
     signIn: 'Sign in',
     mismatch: "Passwords don't match",
-    shortPassword: 'Password should be at least 6 characters',
+    weakPassword: 'Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 symbol.',
+    passwordHint: 'Your password must include all of the following:',
+    requirements: {
+      minLength: 'At least 8 characters',
+      uppercase: 'At least 1 uppercase letter',
+      number: 'At least 1 number',
+      symbol: 'At least 1 symbol',
+    } as Record<PasswordRequirementKey, string>,
     checkEmail: 'Check your email for the confirmation link.',
   },
 } as const;
@@ -54,6 +69,8 @@ const Register = () => {
   const emailRedirectTo = `${window.location.origin}/login?redirect=${encodeURIComponent(redirectPath)}`;
 
   const pageCopy = copy[language];
+  const passwordRequirements = getPasswordRequirements(password);
+  const passwordRequirementKeys = Object.keys(pageCopy.requirements) as PasswordRequirementKey[];
 
   useEffect(() => {
     setStoredPublicLanguage(language);
@@ -68,8 +85,8 @@ const Register = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setError(pageCopy.shortPassword);
+    if (!isPasswordStrong(password)) {
+      setError(pageCopy.weakPassword);
       return;
     }
 
@@ -153,18 +170,34 @@ const Register = () => {
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-indigo-500"
                   />
+                  <div className="mt-3 rounded-lg border border-gray-800 bg-gray-950/70 p-3">
+                    <p className="text-xs font-medium text-gray-400">{pageCopy.passwordHint}</p>
+                    <ul className="mt-3 space-y-2">
+                      {passwordRequirementKeys.map((requirementKey) => {
+                        const isMet = passwordRequirements[requirementKey];
+                        const Icon = isMet ? CheckCircle2 : Circle;
+
+                        return (
+                          <li key={requirementKey} className={`flex items-center gap-2 text-xs ${isMet ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            <Icon size={14} className="shrink-0" />
+                            <span>{pageCopy.requirements[requirementKey]}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.confirm}</label>
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-indigo-500"

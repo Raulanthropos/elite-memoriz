@@ -30,7 +30,7 @@ const copy = {
     bannerHostBody:
       'Το payment step θα μπει τελευταίο. Προς το παρόν, αν είσαι συνδεδεμένος, μπορείς να ολοκληρώσεις το event από εδώ.',
     title: 'Δημιουργία Νέου Event',
-    selectedPlan: 'Επιλεγμένο πακέτο',
+    detailsHint: 'Σε αυτό το βήμα συμπληρώνεις τα βασικά στοιχεία. Το πακέτο επιλέγεται αμέσως μετά.',
     eventName: 'Όνομα event',
     eventNamePlaceholder: 'π.χ. Γάμος Γιάννη και Μαρίας',
     eventDate: 'Ημερομηνία event',
@@ -84,7 +84,7 @@ const copy = {
     bannerHostBody:
       'The payment step will be added last. For now, signed-in hosts can finish creating the event from here.',
     title: 'Create New Event',
-    selectedPlan: 'Selected plan',
+    detailsHint: 'This step is for the core event details. The plan is chosen right after this.',
     eventName: 'Event name',
     eventNamePlaceholder: 'e.g. John and Maria Wedding Celebration',
     eventDate: 'Event date',
@@ -306,7 +306,6 @@ const CreateEvent = () => {
     }
   };
 
-  const selectedTier = pageCopy.tiers[formData.package];
   const displayPreview = previewUrl || DEFAULT_COVERS[formData.category];
   const primaryButtonLabel = authLoading
     ? pageCopy.checkingAccount
@@ -367,7 +366,7 @@ const CreateEvent = () => {
               <h1 className="text-2xl font-bold">{pageCopy.title}</h1>
 
               <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-100">
-                {pageCopy.selectedPlan}: <span className="font-semibold text-white">{selectedTier.name}</span>
+                {pageCopy.detailsHint}
               </div>
 
               <div>

@@ -71,7 +71,7 @@ const PaymentPlaceholder = () => {
   }, []);
 
   const tierLabel = draftSummary.package ?? requestedTier;
-  const draftPath = `/create-event?tier=${encodeURIComponent(requestedTier)}`;
+  const draftPath = draftSummary.package ? '/create-event' : `/create-event?tier=${encodeURIComponent(requestedTier)}`;
 
   return (
     <div className="min-h-screen bg-[#f7f2e8] px-4 py-6 text-stone-900 sm:px-6">
