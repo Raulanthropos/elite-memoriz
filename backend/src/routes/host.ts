@@ -5,6 +5,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { StorageService } from '../services/storage';
 import { getEventExpirationDate, TIER_LIMITS, parseTier } from '../lib/tiers';
+import { getLatestPaidPurchaseForUser } from '../lib/payments';
 import { deleteEventWithAssets } from '../services/eventCleanup';
 
 const router = Router();
@@ -182,12 +183,21 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid package tier' });
     }
 
-    const profileTier = parseTier(profile.tier);
-    if (!profileTier) {
-      return res.status(500).json({ message: 'Profile has invalid tier configuration' });
+    const latestPaidPurchase = await getLatestPaidPurchaseForUser(userId);
+    if (!latestPaidPurchase) {
+      return res.status(403).json({ message: 'Complete payment before creating an event.' });
     }
 
-    const eventTier = requestedTier ?? profileTier;
+    const entitledTier = parseTier(latestPaidPurchase.unlockedTier ?? latestPaidPurchase.selectedTier);
+    if (!entitledTier) {
+      return res.status(500).json({ message: 'Paid entitlement has invalid tier configuration' });
+    }
+
+    if (requestedTier && requestedTier !== entitledTier) {
+      return res.status(403).json({ message: 'Requested package does not match your unlocked tier.' });
+    }
+
+    const eventTier = entitledTier;
 
     // Check Limits
     const existingEventsCount = await db.select({ count: sql<number>`count(*)` })
@@ -195,9 +205,9 @@ router.post('/events', async (req: AuthRequest, res: Response) => {
         .where(eq(schema.events.userId, userId));
     const count = Number(existingEventsCount[0].count);
 
-    if (count >= TIER_LIMITS[profileTier].maxEvents) {
+    if (count >= TIER_LIMITS[eventTier].maxEvents) {
         return res.status(403).json({ 
-            message: `${profileTier.charAt(0)}${profileTier.slice(1).toLowerCase()} plan limit reached. Please upgrade to create more.` 
+            message: `${eventTier.charAt(0)}${eventTier.slice(1).toLowerCase()} plan limit reached. Please upgrade to create more.` 
         });
     }
 

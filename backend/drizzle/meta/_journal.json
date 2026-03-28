@@ -22,6 +22,13 @@
       "when": 1773507296732,
       "tag": "0002_replace_pro_with_premium",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1774732510132,
+      "tag": "0004_stripe_checkout",
+      "breakpoints": true
     }
   ]
 }

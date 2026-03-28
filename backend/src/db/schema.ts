@@ -6,13 +6,15 @@ import {
   integer, 
   boolean, 
   varchar, 
-  uuid
+  uuid,
+  index
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { TIERS } from '../lib/tiers';
 
 // --- ENUMS & CONSTANTS ---
 export const packageTiers = TIERS;
+export const paymentStatuses = ['PENDING', 'PAID', 'FAILED', 'EXPIRED'] as const;
 
 export const profiles = pgTable('profiles', {
   // FIX: Use uuid, not serial. This ID matches auth.users.id directly.
@@ -64,6 +66,28 @@ export const eventGuests = pgTable('event_guests', {
   deviceId: varchar('device_id', { length: 255 }).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const paymentPurchases = pgTable(
+  'payment_purchases',
+  {
+    id: serial('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => profiles.id),
+    selectedTier: text('selected_tier', { enum: packageTiers }).notNull(),
+    unlockedTier: text('unlocked_tier', { enum: packageTiers }),
+    stripeCheckoutSessionId: text('stripe_checkout_session_id').notNull().unique(),
+    stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
+    stripeCustomerEmail: text('stripe_customer_email'),
+    paymentStatus: text('payment_status', { enum: paymentStatuses }).default('PENDING').notNull(),
+    paidAt: timestamp('paid_at'),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    paymentPurchasesUserIdIdx: index('payment_purchases_user_id_idx').on(table.userId),
+    paymentPurchasesStatusIdx: index('payment_purchases_status_idx').on(table.paymentStatus),
+  })
+);
 
 // --- RELATIONS ---
 

@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Check, Crown, ShieldCheck, Star, Upload, UserRoundPlus, X, Zap } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Crown, ShieldCheck, Star, Upload, UserRoundPlus, X, Zap } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
 import { DEFAULT_COVERS } from '../utils/image';
 import { API_URL } from '../lib/config';
+import { fetchPaymentOverview, type PaymentOverview } from '../lib/payments';
 import { parseTier, TIERS } from '../lib/tiers';
-import { CREATE_EVENT_DRAFT_STORAGE_KEY } from '../lib/createEventDraft';
+import {
+  clearStoredCreateEventDraft,
+  getStoredCreateEventDraft,
+  setStoredCreateEventDraft,
+} from '../lib/createEventDraft';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 
@@ -149,12 +154,15 @@ const CreateEvent = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedTier = parseTier(searchParams.get('tier')) ?? 'BASIC';
+  const returnedFromPayment = searchParams.get('source') === 'payment';
   const [language, setLanguage] = useState<PublicLanguage>(getStoredPublicLanguage);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<EventDraft>(() => getDefaultDraft(requestedTier));
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentOverview, setPaymentOverview] = useState<PaymentOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -168,7 +176,7 @@ const CreateEvent = () => {
   }, [language]);
 
   useEffect(() => {
-    const savedDraft = window.sessionStorage.getItem(CREATE_EVENT_DRAFT_STORAGE_KEY);
+    const savedDraft = getStoredCreateEventDraft();
     if (!savedDraft) {
       return;
     }
@@ -193,16 +201,17 @@ const CreateEvent = () => {
       });
       setStep(parsed.step === 2 ? 2 : 1);
     } catch {
-      window.sessionStorage.removeItem(CREATE_EVENT_DRAFT_STORAGE_KEY);
+      clearStoredCreateEventDraft();
     }
   }, [requestedTier]);
 
   useEffect(() => {
-    setFormData((current) => (current.package === requestedTier ? current : { ...current, package: requestedTier }));
-  }, [requestedTier]);
+    const nextTier = paymentOverview?.entitledTier ?? requestedTier;
+    setFormData((current) => (current.package === nextTier ? current : { ...current, package: nextTier }));
+  }, [paymentOverview?.entitledTier, requestedTier]);
 
   useEffect(() => {
-    window.sessionStorage.setItem(CREATE_EVENT_DRAFT_STORAGE_KEY, JSON.stringify({ formData, step }));
+    setStoredCreateEventDraft(JSON.stringify({ formData, step }));
   }, [formData, step]);
 
   useEffect(() => {
@@ -214,8 +223,37 @@ const CreateEvent = () => {
         return;
       }
 
-      setIsAuthenticated(Boolean(session));
-      setAuthLoading(false);
+      const hasSession = Boolean(session);
+      setIsAuthenticated(hasSession);
+
+      if (!hasSession) {
+        setPaymentOverview(null);
+        setPaymentLoading(false);
+        setAuthLoading(false);
+        return;
+      }
+
+      setPaymentLoading(true);
+
+      try {
+        const nextPaymentOverview = await fetchPaymentOverview();
+        if (!isMounted) {
+          return;
+        }
+
+        setPaymentOverview(nextPaymentOverview);
+      } catch (nextError) {
+        if (!isMounted) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : 'Failed to load payment status');
+      } finally {
+        if (isMounted) {
+          setPaymentLoading(false);
+          setAuthLoading(false);
+        }
+      }
     };
 
     void loadSession();
@@ -226,11 +264,11 @@ const CreateEvent = () => {
   }, []);
 
   const persistDraft = (nextStep = step) => {
-    window.sessionStorage.setItem(CREATE_EVENT_DRAFT_STORAGE_KEY, JSON.stringify({ formData, step: nextStep }));
+    setStoredCreateEventDraft(JSON.stringify({ formData, step: nextStep }));
   };
 
   const clearDraft = () => {
-    window.sessionStorage.removeItem(CREATE_EVENT_DRAFT_STORAGE_KEY);
+    clearStoredCreateEventDraft();
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,6 +297,11 @@ const CreateEvent = () => {
     navigate(`/register?redirect=${encodeURIComponent(paymentPath)}`);
   };
 
+  const handleContinueToPayment = () => {
+    persistDraft(2);
+    navigate(`/payment?tier=${encodeURIComponent(formData.package)}`);
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
@@ -266,8 +309,20 @@ const CreateEvent = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
+        setLoading(false);
         handleContinueToRegistration();
         return;
+      }
+
+      const entitledTier = paymentOverview?.entitledTier;
+      if (!entitledTier) {
+        setLoading(false);
+        handleContinueToPayment();
+        return;
+      }
+
+      if (formData.package !== entitledTier) {
+        throw new Error('The selected plan does not match your unlocked tier.');
       }
 
       let finalCoverImage = formData.coverImage;
@@ -307,11 +362,60 @@ const CreateEvent = () => {
   };
 
   const displayPreview = previewUrl || DEFAULT_COVERS[formData.category];
-  const primaryButtonLabel = authLoading
-    ? pageCopy.checkingAccount
+  const hasPaidTier = Boolean(paymentOverview?.hasPaidTier && paymentOverview.entitledTier);
+  const isStatusLoading = authLoading || (isAuthenticated && paymentLoading);
+  const tierSelectionLocked = Boolean(paymentOverview?.entitledTier);
+  const isFinalizeMode = returnedFromPayment && hasPaidTier;
+  const finalizeCreateLabel = language === 'el' ? 'Δημιούργησε το πληρωμένο event' : 'Create Your Paid Event';
+  const continueToPaymentLabel = language === 'el' ? 'Συνέχεια στο Payment' : 'Continue to Payment';
+  const primaryButtonLabel = isStatusLoading
+    ? (language === 'el' ? 'Έλεγχος κατάστασης πληρωμής...' : 'Checking payment status...')
     : isAuthenticated
-      ? (loading ? pageCopy.creating : pageCopy.createEvent)
+      ? hasPaidTier
+        ? (loading ? pageCopy.creating : isFinalizeMode ? finalizeCreateLabel : pageCopy.createEvent)
+        : continueToPaymentLabel
       : pageCopy.continueRegistration;
+  const planBody = !isAuthenticated
+    ? pageCopy.choosePlanGuestBody
+    : hasPaidTier
+      ? isFinalizeMode
+        ? (language === 'el'
+            ? 'Η πληρωμή έχει επιβεβαιωθεί. Δες το κλειδωμένο πακέτο σου παρακάτω και δημιούργησε το event.'
+            : 'Your payment is confirmed. Review your locked plan below and create the event.')
+        : (language === 'el'
+            ? 'Το πληρωμένο πακέτο σου είναι ενεργό. Δες το παρακάτω και δημιούργησε το event.'
+            : 'Your paid tier is active. Review it below and create the event.')
+      : (language === 'el'
+          ? 'Ολοκλήρωσε πρώτα την πληρωμή και μετά επέστρεψε εδώ για να δημιουργήσεις το event με το ξεκλειδωμένο πακέτο σου.'
+          : 'Complete payment first, then return here to create the event with your unlocked tier.');
+  const bannerTitle = !isAuthenticated
+    ? pageCopy.bannerGuestTitle
+    : hasPaidTier
+      ? isFinalizeMode
+        ? (language === 'el' ? 'Η πληρωμή επιβεβαιώθηκε. Ολοκλήρωσε τώρα το event σου.' : 'Payment confirmed. Finalize your event now.')
+        : (language === 'el' ? 'Το πληρωμένο πακέτο σου είναι ενεργό.' : 'Your paid tier is active.')
+      : (language === 'el' ? 'Ολοκλήρωσε την πληρωμή πριν τη δημιουργία event.' : 'Complete payment before event creation.');
+  const bannerBody = !isAuthenticated
+    ? pageCopy.bannerGuestBody
+    : hasPaidTier
+      ? isFinalizeMode
+        ? (language === 'el'
+            ? 'Βρίσκεσαι πλέον στο τελικό βήμα. Συμπλήρωσε τα στοιχεία παρακάτω και δημιούργησε το event με το πληρωμένο πακέτο σου.'
+            : 'You are in the final setup step now. Finish the event details below and then create the event with your paid tier.')
+        : (language === 'el'
+            ? 'Συμπλήρωσε τα στοιχεία παρακάτω και δημιούργησε το event με το ξεκλειδωμένο πακέτο σου.'
+            : 'Finish the event details below and create the event with your unlocked tier.')
+      : (language === 'el'
+          ? 'Ολοκλήρωσε πρώτα την πληρωμή και μετά επέστρεψε εδώ για να δημιουργήσεις το event με το ξεκλειδωμένο πακέτο σου.'
+          : 'Complete payment first, then return here to create the event with your unlocked tier.');
+  const pageTitle = isFinalizeMode
+    ? (language === 'el' ? 'Ολοκλήρωση Event' : 'Finalize Your Event')
+    : pageCopy.title;
+  const detailsHint = isFinalizeMode
+    ? (language === 'el'
+        ? 'Η πληρωμή ολοκληρώθηκε. Συμπλήρωσε τα στοιχεία του event και στο επόμενο βήμα θα δεις το κλειδωμένο πακέτο σου πριν τη δημιουργία.'
+        : 'Payment is complete. Add the event details below, then review your locked plan and create the event.')
+    : pageCopy.detailsHint;
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 text-white sm:p-8">
@@ -346,10 +450,10 @@ const CreateEvent = () => {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">
-                  {isAuthenticated ? pageCopy.bannerHostTitle : pageCopy.bannerGuestTitle}
+                  {bannerTitle}
                 </p>
                 <p className="mt-1 text-sm leading-6 text-gray-300">
-                  {isAuthenticated ? pageCopy.bannerHostBody : pageCopy.bannerGuestBody}
+                  {bannerBody}
                 </p>
               </div>
             </div>
@@ -363,10 +467,10 @@ const CreateEvent = () => {
               }}
               className="space-y-6"
             >
-              <h1 className="text-2xl font-bold">{pageCopy.title}</h1>
+              <h1 className="text-2xl font-bold">{pageTitle}</h1>
 
               <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-100">
-                {pageCopy.detailsHint}
+                {detailsHint}
               </div>
 
               <div>
@@ -484,48 +588,96 @@ const CreateEvent = () => {
           {step === 2 && (
             <div>
               <h1 className="text-2xl font-bold">{pageCopy.choosePlan}</h1>
-              <p className="mt-2 text-sm text-gray-400">
-                {isAuthenticated ? pageCopy.choosePlanHostBody : pageCopy.choosePlanGuestBody}
-              </p>
+              <p className="mt-2 text-sm text-gray-400">{planBody}</p>
 
-              <div className="mt-8 space-y-3">
-                {TIERS.map((tierId) => {
-                  const tier = pageCopy.tiers[tierId];
-                  const isSelected = formData.package === tierId;
-
-                  return (
-                    <div
-                      key={tierId}
-                      onClick={() => setFormData({ ...formData, package: tierId })}
-                      className={`cursor-pointer rounded-xl border p-4 transition-all ${
-                        isSelected
-                          ? 'border-indigo-500 bg-indigo-900/20 ring-1 ring-indigo-500'
-                          : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="rounded-lg border border-gray-700 bg-gray-800 p-2">
-                            {tierIcons[tierId]}
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-white">{tier.name}</h3>
-                            <p className="text-xs text-gray-400">{tier.features.join(' / ')}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="block font-bold text-white">{tier.price}</span>
-                          {isSelected && <Check size={16} className="ml-auto mt-1 text-indigo-400" />}
-                        </div>
+              {hasPaidTier ? (
+                <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-200">
+                        {tierIcons[formData.package]}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-200/70">
+                          {language === 'el' ? 'Πληρωμένο πακέτο' : 'Paid tier'}
+                        </p>
+                        <h3 className="mt-2 text-xl font-bold text-white">{pageCopy.tiers[formData.package].name}</h3>
+                        <p className="mt-2 text-sm leading-6 text-gray-300">
+                          {language === 'el'
+                            ? 'Αυτό είναι το πακέτο που ξεκλειδώθηκε από την επιβεβαιωμένη πληρωμή σου.'
+                            : 'This is the tier unlocked by your confirmed payment.'}
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="text-right">
+                      <span className="block text-2xl font-bold text-white">{pageCopy.tiers[formData.package].price}</span>
+                      <CheckCircle2 size={18} className="ml-auto mt-2 text-emerald-300" />
+                    </div>
+                  </div>
 
-              {!isAuthenticated && (
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {pageCopy.tiers[formData.package].features.map((feature) => (
+                      <span
+                        key={feature}
+                        className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-gray-200"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-8 space-y-3">
+                  {TIERS.map((tierId) => {
+                    const tier = pageCopy.tiers[tierId];
+                    const isSelected = formData.package === tierId;
+
+                    return (
+                      <div
+                        key={tierId}
+                        onClick={() => !tierSelectionLocked && setFormData({ ...formData, package: tierId })}
+                        className={`rounded-xl border p-4 transition-all ${
+                          isSelected
+                            ? 'border-indigo-500 bg-indigo-900/20 ring-1 ring-indigo-500'
+                            : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
+                        } ${tierSelectionLocked ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="rounded-lg border border-gray-700 bg-gray-800 p-2">
+                              {tierIcons[tierId]}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-white">{tier.name}</h3>
+                              <p className="text-xs text-gray-400">{tier.features.join(' / ')}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="block font-bold text-white">{tier.price}</span>
+                            {isSelected && <Check size={16} className="ml-auto mt-1 text-indigo-400" />}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!isAuthenticated ? (
                 <div className="mt-6 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
                   {pageCopy.draftNotice}
+                </div>
+              ) : hasPaidTier ? (
+                <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                  {language === 'el'
+                    ? 'Το πληρωμένο πακέτο σου είναι κλειδωμένο για αυτό το event, οπότε εδώ βλέπεις μόνο την τελική επιβεβαίωση πριν τη δημιουργία.'
+                    : 'Your paid tier is locked for this event, so this step is now just the final confirmation before creation.'}
+                </div>
+              ) : (
+                <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  {language === 'el'
+                    ? 'Απαιτείται πληρωμή πριν δημιουργηθεί το event.'
+                    : 'Payment is required before this event can be created.'}
                 </div>
               )}
 
@@ -539,12 +691,12 @@ const CreateEvent = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={isAuthenticated ? handleSubmit : handleContinueToRegistration}
-                  disabled={loading || authLoading}
+                  onClick={isAuthenticated ? (hasPaidTier ? handleSubmit : handleContinueToPayment) : handleContinueToRegistration}
+                  disabled={loading || isStatusLoading}
                   className="inline-flex flex-[2] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg transition-all hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {primaryButtonLabel}
-                  {!loading && !authLoading && <ArrowRight size={16} />}
+                  {!loading && !isStatusLoading && <ArrowRight size={16} />}
                 </button>
               </div>
             </div>

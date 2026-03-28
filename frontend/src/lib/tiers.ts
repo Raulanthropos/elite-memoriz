@@ -2,6 +2,19 @@ export const TIERS = ['BASIC', 'PREMIUM', 'LUXURY'] as const;
 
 export type Tier = (typeof TIERS)[number];
 
+export const parseNullableTier = (value: unknown): Tier | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return TIERS.find((tier) => tier === normalized) ?? null;
+};
+
 export const parseTier = (value: unknown): Tier | null => {
   if (value == null) {
     return 'BASIC';
@@ -11,12 +24,11 @@ export const parseTier = (value: unknown): Tier | null => {
     return null;
   }
 
-  const normalized = value.trim().toUpperCase();
-  if (!normalized) {
+  if (!value.trim()) {
     return 'BASIC';
   }
 
-  return TIERS.find((tier) => tier === normalized) ?? null;
+  return parseNullableTier(value);
 };
 
 export const getTierBadge = (value: unknown) => {

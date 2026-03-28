@@ -10,6 +10,8 @@ const Register = lazy(() => import('./pages/Register'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CreateEvent = lazy(() => import('./pages/CreateEvent'));
 const PaymentPlaceholder = lazy(() => import('./pages/PaymentPlaceholder'));
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
+const PaymentCancel = lazy(() => import('./pages/PaymentCancel'));
 const EventDetails = lazy(() => import('./pages/EventDetailsPage'));
 const ExitPage = lazy(() => import('./pages/ExitPage'));
 const GuestEventPage = lazy(() =>
@@ -46,7 +48,30 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/payment" element={<PaymentPlaceholder />} />
+            <Route
+              path="/payment"
+              element={
+                <ProtectedRoute>
+                  <PaymentPlaceholder />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/payment/success"
+              element={
+                <ProtectedRoute>
+                  <PaymentSuccess />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/payment/cancel"
+              element={
+                <ProtectedRoute>
+                  <PaymentCancel />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/e/:slug" element={<GuestEventPage />} />
             <Route path="/exit" element={<ExitPage />} />
             <Route
