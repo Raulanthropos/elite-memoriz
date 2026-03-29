@@ -33,7 +33,11 @@ export default defineConfig({
             return 'three-vendor';
           }
 
-          if (id.includes('react-router-dom')) {
+          if (
+            id.includes('react-router-dom') ||
+            id.includes('/react-router/') ||
+            id.includes('@remix-run/router')
+          ) {
             return 'router-vendor';
           }
 
@@ -45,7 +49,11 @@ export default defineConfig({
             return 'qr-vendor';
           }
 
-          if (id.includes('/react/') || id.includes('/react-dom/')) {
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/scheduler/')
+          ) {
             return 'react-vendor';
           }
 
