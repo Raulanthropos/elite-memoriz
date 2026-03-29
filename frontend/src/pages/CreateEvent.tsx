@@ -366,6 +366,13 @@ const CreateEvent = () => {
   const isStatusLoading = authLoading || (isAuthenticated && paymentLoading);
   const tierSelectionLocked = Boolean(paymentOverview?.entitledTier);
   const isFinalizeMode = returnedFromPayment && hasPaidTier;
+  const hasDraftDetails = formData.title.trim().length > 0 && formData.date.trim().length > 0;
+
+  useEffect(() => {
+    if (isFinalizeMode && hasDraftDetails) {
+      setStep(2);
+    }
+  }, [hasDraftDetails, isFinalizeMode]);
   const finalizeCreateLabel = language === 'el' ? 'Δημιούργησε το πληρωμένο event' : 'Create Your Paid Event';
   const continueToPaymentLabel = language === 'el' ? 'Συνέχεια στο Payment' : 'Continue to Payment';
   const primaryButtonLabel = isStatusLoading

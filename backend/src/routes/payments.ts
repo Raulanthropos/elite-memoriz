@@ -14,7 +14,7 @@ import {
   getStripePriceId,
   getStripeWebhookSecret,
 } from '../lib/payments';
-import { parseTier } from '../lib/tiers';
+import { parseNullableTier, parseTier } from '../lib/tiers';
 
 const router = Router();
 
@@ -137,6 +137,7 @@ router.use(authMiddleware);
 
 router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const overview = await getPaymentOverview(req.user!.id);
     res.json(overview);
   } catch (error) {
@@ -220,6 +221,7 @@ router.post('/checkout-sessions', async (req: AuthRequest, res: Response) => {
 
 router.get('/checkout-session-status', async (req: AuthRequest, res: Response) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const sessionId = typeof req.query.session_id === 'string' ? req.query.session_id.trim() : '';
 
     if (!sessionId) {
@@ -242,6 +244,18 @@ router.get('/checkout-session-status', async (req: AuthRequest, res: Response) =
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
+    if (
+      purchase.paymentStatus === 'PENDING'
+      && checkoutSession.status === 'complete'
+      && checkoutSession.payment_status === 'paid'
+    ) {
+      await markPurchasePaid(checkoutSession);
+      purchase = await getPurchaseBySessionId(sessionId);
+      if (!purchase) {
+        return res.status(404).json({ message: 'Checkout session not found' });
+      }
+    }
+
     if (purchase.paymentStatus === 'PENDING' && checkoutSession.status === 'expired') {
       await markPurchaseStatus(checkoutSession, 'EXPIRED');
       purchase = await getPurchaseBySessionId(sessionId);
@@ -250,8 +264,8 @@ router.get('/checkout-session-status', async (req: AuthRequest, res: Response) =
       }
     }
 
-    const selectedTier = parseTier(purchase.selectedTier);
-    const unlockedTier = parseTier(purchase.unlockedTier);
+    const selectedTier = parseNullableTier(purchase.selectedTier);
+    const unlockedTier = parseNullableTier(purchase.unlockedTier);
     const isUnlocked = purchase.paymentStatus === 'PAID' && Boolean(unlockedTier);
 
     res.json({

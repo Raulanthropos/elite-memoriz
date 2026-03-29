@@ -63,6 +63,7 @@ const parseJsonResponse = async <T>(response: Response): Promise<T> => {
 export const fetchPaymentOverview = async (): Promise<PaymentOverview> => {
   const accessToken = await getAccessToken();
   const response = await fetch(`${API_URL}/api/payments/status`, {
+    cache: 'no-store',
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -99,6 +100,7 @@ export const fetchCheckoutSessionStatus = async (sessionId: string): Promise<Che
   const response = await fetch(
     `${API_URL}/api/payments/checkout-session-status?session_id=${encodeURIComponent(sessionId)}`,
     {
+      cache: 'no-store',
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },

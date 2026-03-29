@@ -12,10 +12,14 @@ const copy = {
     titlePending: 'Η πληρωμή επεξεργάζεται ακόμη',
     titleFailed: 'Δεν υπάρχει επιβεβαιωμένη πληρωμή ακόμη',
     checkingBody: 'Ελέγχουμε το backend και περιμένουμε το verified webhook πριν προχωρήσεις.',
-    pendingBody: 'Το Stripe redirect ολοκληρώθηκε, αλλά η εφαρμογή περιμένει ακόμη την επιβεβαίωση από το webhook. Θα ξαναδοκιμάσουμε αυτόματα.',
+    pendingBody:
+      'Το Stripe redirect ολοκληρώθηκε, αλλά η εφαρμογή περιμένει ακόμη την επιβεβαίωση από το webhook. Θα ξαναδοκιμάσουμε αυτόματα.',
     paidBody: 'Το πακέτο σου έχει ξεκλειδωθεί. Σε λίγο θα μεταφερθείς στη δημιουργία event.',
-    failedBody: 'Αν η πληρωμή ακυρώθηκε ή έληξε, μπορείς να επιστρέψεις και να δοκιμάσεις ξανά με ασφάλεια.',
+    failedBody:
+      'Αν η πληρωμή ακυρώθηκε ή έληξε, μπορείς να επιστρέψεις και να δοκιμάσεις ξανά με ασφάλεια.',
     missingSession: 'Λείπει το session_id από το success URL.',
+    sessionStillOpen:
+      'Αυτό το Checkout Session είναι ακόμη open στο Stripe και δεν υπάρχει ολοκληρωμένη πληρωμή. Επέστρεψε στο Payment και ξεκίνησε νέα προσπάθεια.',
     continueCta: 'Συνέχεια στο Create Event',
     retryCta: 'Επιστροφή στο Payment',
     dashboardCta: 'Dashboard',
@@ -27,10 +31,13 @@ const copy = {
     titlePending: 'Payment is still processing',
     titleFailed: 'No confirmed payment yet',
     checkingBody: 'We are checking the backend and waiting for the verified webhook before moving you forward.',
-    pendingBody: 'Stripe redirected back successfully, but the app is still waiting for webhook confirmation. We will retry automatically.',
+    pendingBody:
+      'Stripe redirected back successfully, but the app is still waiting for webhook confirmation. We will retry automatically.',
     paidBody: 'Your tier has been unlocked. You will be sent to the event creation page in a moment.',
     failedBody: 'If the payment was cancelled or expired, you can safely go back and try again.',
     missingSession: 'The success URL is missing a session_id.',
+    sessionStillOpen:
+      'This Checkout Session is still open in Stripe and no completed payment exists for it yet. Go back to Payment and start a fresh attempt.',
     continueCta: 'Continue to Create Event',
     retryCta: 'Back to Payment',
     dashboardCta: 'Dashboard',
@@ -75,12 +82,22 @@ const PaymentSuccess = () => {
         }
 
         setSessionStatus(nextStatus);
+        setError(null);
 
         if (nextStatus.isUnlocked && nextStatus.creationPath) {
           setVerificationState('paid');
           redirectTimeout = window.setTimeout(() => {
             navigate(nextStatus.creationPath!, { replace: true });
           }, 1200);
+          return;
+        }
+
+        if (
+          nextStatus.stripeCheckoutStatus === 'open'
+          && nextStatus.stripePaymentStatus === 'unpaid'
+        ) {
+          setVerificationState('failed');
+          setError(pageCopy.sessionStillOpen);
           return;
         }
 
@@ -116,7 +133,7 @@ const PaymentSuccess = () => {
         window.clearTimeout(redirectTimeout);
       }
     };
-  }, [navigate, pageCopy.missingSession, searchParams]);
+  }, [navigate, pageCopy.missingSession, pageCopy.sessionStillOpen, searchParams]);
 
   const title =
     verificationState === 'paid'
@@ -174,7 +191,9 @@ const PaymentSuccess = () => {
 
           {sessionStatus && (
             <div className="mt-8 rounded-2xl border border-gray-800 bg-gray-950/70 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">{pageCopy.detailsLabel}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">
+                {pageCopy.detailsLabel}
+              </p>
               <div className="mt-4 grid gap-3 text-sm text-gray-300 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                   <span className="text-gray-500">Payment</span>

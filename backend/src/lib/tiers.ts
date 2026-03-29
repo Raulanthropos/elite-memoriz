@@ -64,6 +64,24 @@ export const parseTier = (value: unknown): Tier | null => {
   return TIERS.find((tier) => tier === normalized) ?? null;
 };
 
+export const parseNullableTier = (value: unknown): Tier | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const legacyAlias = LEGACY_TIER_ALIASES[normalized];
+  if (legacyAlias) {
+    return legacyAlias;
+  }
+
+  return TIERS.find((tier) => tier === normalized) ?? null;
+};
+
 export const getTierRetentionMonths = (value: unknown) => {
   const tier = parseTier(value) ?? 'BASIC';
   return TIER_LIMITS[tier].retentionMonths;

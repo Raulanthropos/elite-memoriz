@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db';
 import * as schema from '../db/schema';
-import { parseTier, type Tier } from './tiers';
+import { parseNullableTier, parseTier, type Tier } from './tiers';
 
 export type PaymentStatus = (typeof schema.paymentStatuses)[number];
 export type PaymentOverviewStatus = PaymentStatus | 'NOT_STARTED';
@@ -132,7 +132,7 @@ const getTierFromPurchaseRecord = (purchase: PaymentPurchaseRecord | null) => {
     return null;
   }
 
-  return parseTier(purchase.unlockedTier ?? purchase.selectedTier);
+  return parseNullableTier(purchase.unlockedTier) ?? parseNullableTier(purchase.selectedTier);
 };
 
 export const getPaymentOverview = async (userId: string) => {
