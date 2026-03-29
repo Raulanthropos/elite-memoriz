@@ -11,4 +11,6 @@ if (apiUrl.includes('localhost') && window.location.hostname !== 'localhost') {
   apiUrl = apiUrl.replace('localhost', window.location.hostname);
 }
 
-export const API_URL = apiUrl;
+const isViteDevServer = import.meta.env.DEV && window.location.port === '5173';
+
+export const API_URL = isViteDevServer ? '' : apiUrl;

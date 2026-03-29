@@ -36,6 +36,7 @@ interface Memory {
 }
 
 const INACTIVITY_TIMEOUT_MS = 3_600_000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 45_000;
 
 const renderMemoryMedia = (memory: Memory, className: string) => {
   const mediaUrl = getImageUrl(memory.storagePath);
@@ -92,11 +93,42 @@ export const GuestEventPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inactivityTimerRef = useRef<number | null>(null);
 
+  const revokeObjectUrl = (url: string | null) => {
+    if (url?.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const clearComposerState = () => {
+    revokeObjectUrl(previewUrl);
+    revokeObjectUrl(pendingImagePreviewUrl);
+    revokeObjectUrl(rawFileUrl);
+    setSelectedFile(null);
+    setPendingImageFile(null);
+    setPreviewUrl(null);
+    setPendingImagePreviewUrl(null);
+    setRawFileUrl(null);
+    setIsCropping(false);
+    setUploading(false);
+    setSuccess(false);
+    setCaption('');
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         setAccessError(null);
         setIsEventFull(false);
+        setEvent(null);
+        setMemories([]);
+        setSelectedMemory(null);
+        setPanoramaMemory(null);
+        clearComposerState();
 
         // 1. Generate or Retrieve Device ID
         let deviceId = localStorage.getItem('guest_device_id');
@@ -114,6 +146,7 @@ export const GuestEventPage: React.FC = () => {
         // 2. Register Guest & Check Application Limits
         const joinRes = await fetch(`${API_URL}/api/events/${slug}/join`, {
             method: 'POST',
+            cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deviceId })
         });
@@ -136,8 +169,8 @@ export const GuestEventPage: React.FC = () => {
 
         // 3. Fetch Data if allowed in
         const [eventRes, memoriesRes] = await Promise.all([
-            fetch(`${API_URL}/api/events/${slug}`),
-            fetch(`${API_URL}/api/events/${slug}/memories`)
+            fetch(`${API_URL}/api/events/${slug}`, { cache: 'no-store' }),
+            fetch(`${API_URL}/api/events/${slug}/memories`, { cache: 'no-store' })
         ]);
 
         if (!eventRes.ok) {
@@ -164,6 +197,12 @@ export const GuestEventPage: React.FC = () => {
     };
     fetchData();
   }, [slug]);
+
+  useEffect(() => {
+    return () => {
+      clearComposerState();
+    };
+  }, []);
 
   useEffect(() => {
     const currentEventId = event?.id;
@@ -380,6 +419,10 @@ export const GuestEventPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    revokeObjectUrl(previewUrl);
+    revokeObjectUrl(pendingImagePreviewUrl);
+    revokeObjectUrl(rawFileUrl);
+
     const url = URL.createObjectURL(file);
 
     if (file.type.startsWith('image/')) {
@@ -407,6 +450,7 @@ export const GuestEventPage: React.FC = () => {
     const nextFileName = originalName.replace(/\.[^.]+$/, '') + '.jpg';
     const file = new File([croppedBlob], nextFileName, { type: croppedBlob.type || 'image/jpeg' });
     
+    revokeObjectUrl(previewUrl);
     const url = URL.createObjectURL(croppedBlob);
     setPreviewUrl(url);
     setSelectedFile(file);
@@ -470,10 +514,14 @@ export const GuestEventPage: React.FC = () => {
     const finalCaption = `${caption} - Uploaded by ${guestName}`.trim();
     formData.append('memory', finalCaption); 
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), UPLOAD_REQUEST_TIMEOUT_MS);
+
     try {
       const res = await fetch(`${API_URL}/api/events/${slug}/upload`, {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -484,8 +532,13 @@ export const GuestEventPage: React.FC = () => {
       setSuccess(true);
       
     } catch (err) {
-      alert(`Upload failed: ${(err as Error).message}`);
+      const message =
+        err instanceof DOMException && err.name === 'AbortError'
+          ? 'Upload timed out. Please try again.'
+          : (err as Error).message;
+      alert(`Upload failed: ${message}`);
     } finally {
+      window.clearTimeout(timeoutId);
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -669,7 +722,7 @@ export const GuestEventPage: React.FC = () => {
             <h3 className="text-xl font-bold text-gray-800">Memory Sent!</h3>
             <p className="text-gray-500 text-sm mb-6">It will appear once approved.</p>
             <button 
-                onClick={() => { setSuccess(false); setSelectedFile(null); setPendingImageFile(null); setPreviewUrl(null); setPendingImagePreviewUrl(null); setRawFileUrl(null); setCaption(''); }}
+                onClick={() => { clearComposerState(); }}
                 className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl shadow-md transition-colors"
             >
                 Upload Another

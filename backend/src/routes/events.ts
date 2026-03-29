@@ -11,6 +11,8 @@ import { TIER_LIMITS, Tier, TierLimits, parseTier } from '../lib/tiers';
 const router = Router();
 const MAX_MEMORY_TEXT_LENGTH = 1_000;
 const ALLOWED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
+const STORAGE_UPLOAD_TIMEOUT_MS = 45_000;
+const AI_REWRITE_TIMEOUT_MS = 20_000;
 
 type UploadRouteLocals = {
   uploadEvent?: typeof events.$inferSelect;
@@ -37,6 +39,28 @@ const getMemoryTypeFromMimeType = (mimeType: string): 'photo' | 'video' | 'audio
   }
 
   return null;
+};
+
+const createGuestTraceId = (label: string, slug: string) =>
+  `${label}-${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 };
 
 const uploadSingleMemory = async (
@@ -193,9 +217,13 @@ const getDeviceIdOrRespond = (req: Request, res: Response): string | null => {
 
 // GET /:slug - Retrieve event details
 router.get('/:slug', async (req: Request, res: Response) => {
+  const slugForTrace = typeof req.params.slug === 'string' ? req.params.slug.trim() : 'unknown';
+  const traceId = createGuestTraceId('guest-event', slugForTrace);
   try {
+    console.log(`[GUEST_TRACE ${traceId}] event:start`);
     const slug = getSlugOrRespond(req, res);
     if (!slug) {
+      console.log(`[GUEST_TRACE ${traceId}] event:invalid-slug`);
       return;
     }
     
@@ -205,14 +233,17 @@ router.get('/:slug', async (req: Request, res: Response) => {
     });
 
     if (!event) {
+      console.log(`[GUEST_TRACE ${traceId}] event:not-found`);
       return res.status(404).json({ message: 'Event not found' });
     }
 
     if (isEventExpired(event)) {
+      console.log(`[GUEST_TRACE ${traceId}] event:expired`, { eventId: event.id });
       return res.status(403).json({ message: 'Event has expired' });
     }
 
     // Return public details
+    console.log(`[GUEST_TRACE ${traceId}] event:success`, { eventId: event.id });
     res.json({
       id: event.id,
       title: event.title,
@@ -224,16 +255,20 @@ router.get('/:slug', async (req: Request, res: Response) => {
       package: parseTier(event.package) ?? 'BASIC',
     });
   } catch (error) {
-    console.error('Error fetching event:', error);
+    console.error(`[GUEST_TRACE ${traceId}] event:error`, error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // GET /:slug/memories - Fetch approved memories for public gallery
 router.get('/:slug/memories', async (req: Request, res: Response) => {
+  const slugForTrace = typeof req.params.slug === 'string' ? req.params.slug.trim() : 'unknown';
+  const traceId = createGuestTraceId('guest-memories', slugForTrace);
   try {
+    console.log(`[GUEST_TRACE ${traceId}] memories:start`);
     const slug = getSlugOrRespond(req, res);
     if (!slug) {
+      console.log(`[GUEST_TRACE ${traceId}] memories:invalid-slug`);
       return;
     }
     
@@ -241,8 +276,12 @@ router.get('/:slug/memories', async (req: Request, res: Response) => {
       where: eq(events.slug, slug),
     });
 
-    if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (!event) {
+      console.log(`[GUEST_TRACE ${traceId}] memories:not-found`);
+      return res.status(404).json({ message: 'Event not found' });
+    }
     if (isEventExpired(event)) {
+      console.log(`[GUEST_TRACE ${traceId}] memories:expired`, { eventId: event.id });
       return res.status(403).json({ message: 'Event has expired' });
     }
 
@@ -255,18 +294,30 @@ router.get('/:slug/memories', async (req: Request, res: Response) => {
       limit: 50
     });
 
+    console.log(`[GUEST_TRACE ${traceId}] memories:success`, {
+      eventId: event.id,
+      memoryCount: eventMemories.length,
+    });
     res.json(eventMemories);
   } catch (error) {
-    console.error('Error fetching memories:', error);
+    console.error(`[GUEST_TRACE ${traceId}] memories:error`, error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // POST /:slug/upload - Guest upload
 router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Response<unknown, UploadRouteLocals>) => {
+  const slugForTrace = typeof req.params.slug === 'string' ? req.params.slug.trim() : 'unknown';
+  const traceId = createGuestTraceId('guest-upload', slugForTrace);
   try {
+    console.log(`[GUEST_TRACE ${traceId}] upload:start`, {
+      hasFile: Boolean(req.file),
+      mimeType: req.file?.mimetype ?? null,
+      sizeBytes: req.file?.size ?? null,
+    });
     const slug = getSlugOrRespond(req, res);
     if (!slug) {
+      console.log(`[GUEST_TRACE ${traceId}] upload:invalid-slug`);
       cleanupTempUpload(req.file);
       return;
     }
@@ -278,6 +329,7 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     const file = req.file;
 
     if (!file) {
+      console.log(`[GUEST_TRACE ${traceId}] upload:no-file`);
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
@@ -286,12 +338,14 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     const limits = res.locals.uploadLimits;
 
     if (!event || !tier || !limits) {
+      console.log(`[GUEST_TRACE ${traceId}] upload:missing-context`);
       cleanupTempUpload(file);
       return res.status(500).json({ message: 'Upload context was not initialized' });
     }
 
     const memoryType = getMemoryTypeFromMimeType(file.mimetype);
     if (!memoryType) {
+      console.log(`[GUEST_TRACE ${traceId}] upload:unsupported-type`, { mimeType: file.mimetype });
       cleanupTempUpload(file);
       return res.status(400).json({ message: 'Unsupported file type' });
     }
@@ -299,6 +353,11 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     const currentStorageUsed = await getCurrentEventStorageUsage(event.id);
 
     if (currentStorageUsed + file.size > limits.maxStorageBytes) {
+      console.log(`[GUEST_TRACE ${traceId}] upload:storage-limit`, {
+        currentStorageUsed,
+        incomingSize: file.size,
+        maxStorageBytes: limits.maxStorageBytes,
+      });
       cleanupTempUpload(file);
       return res.status(403).json({ message: `Storage limit reached for ${event.package} tier.` });
     }
@@ -311,13 +370,30 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
 
     // Generate a unique path: events/{eventId}/{timestamp}-{filename}
     const storagePath = `events/${event.id}/${Date.now()}-${file.originalname}`;
-    const publicUrl = await StorageService.uploadFile(file, storagePath);
+    const publicUrl = await withTimeout(
+      StorageService.uploadFile(file, storagePath),
+      STORAGE_UPLOAD_TIMEOUT_MS,
+      'Storage upload'
+    );
+    console.log(`[GUEST_TRACE ${traceId}] upload:storage-complete`, { storagePath });
 
     // 4. AI Processing
     const shouldGenerateAiStory = limits.aiStoriesEnabled && memoryType === 'photo';
-    const aiStory = shouldGenerateAiStory
-      ? await AIService.rewriteMemory(cleanOriginal, file.buffer, file.mimetype)
-      : null;
+    let aiStory: string | null = null;
+
+    if (shouldGenerateAiStory) {
+      try {
+        aiStory = await withTimeout(
+          AIService.rewriteMemory(cleanOriginal, file.buffer, file.mimetype),
+          AI_REWRITE_TIMEOUT_MS,
+          'AI rewrite'
+        );
+        console.log(`[GUEST_TRACE ${traceId}] upload:ai-complete`);
+      } catch (error) {
+        console.error(`[GUEST_TRACE ${traceId}] upload:ai-fallback`, error);
+        aiStory = cleanOriginal || null;
+      }
+    }
 
     // 5. Save to DB
     await db.transaction(async (tx) => {
@@ -341,6 +417,11 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     // Cleanup local file
     cleanupTempUpload(file);
 
+    console.log(`[GUEST_TRACE ${traceId}] upload:success`, {
+      eventId: event.id,
+      memoryType,
+      fileSize: file.size,
+    });
     res.status(201).json({ 
       message: 'Memory captured successfully!', 
       story: aiStory,
@@ -349,9 +430,8 @@ router.post('/:slug/upload', uploadSinglePhoto, async (req: Request, res: Respon
     });
 
   } catch (error) {
-    console.error('Upload handler error:', error);
+    console.error(`[GUEST_TRACE ${traceId}] upload:error`, error);
     cleanupTempUpload(req.file);
-    console.error('[UPLOAD ERROR]:', error);
 
     res.status(500).json({ message: 'Upload crashed: ' + (error instanceof Error ? error.message : String(error)) });
   }
@@ -406,30 +486,38 @@ router.post('/:slug/memories/:id/like', async (req: Request, res: Response) => {
 
 // POST /:slug/join - Register a guest device and check capacity limits
 router.post('/:slug/join', async (req: Request, res: Response) => {
+  const slugForTrace = typeof req.params.slug === 'string' ? req.params.slug.trim() : 'unknown';
+  const traceId = createGuestTraceId('guest-join', slugForTrace);
   try {
+    console.log(`[GUEST_TRACE ${traceId}] join:start`);
     const slug = getSlugOrRespond(req, res);
     if (!slug) {
+      console.log(`[GUEST_TRACE ${traceId}] join:invalid-slug`);
       return;
     }
 
     const deviceId = getDeviceIdOrRespond(req, res);
     if (!deviceId) {
+      console.log(`[GUEST_TRACE ${traceId}] join:invalid-device-id`);
       return;
     }
 
     const eventResult = await db.select().from(events).where(eq(events.slug, slug));
     
     if (eventResult.length === 0) {
+      console.log(`[GUEST_TRACE ${traceId}] join:not-found`);
       return res.status(404).json({ message: 'Event not found' });
     }
 
     const event = eventResult[0];
     if (isEventExpired(event)) {
+      console.log(`[GUEST_TRACE ${traceId}] join:expired`, { eventId: event.id });
       return res.status(403).json({ message: 'Event has expired' });
     }
     const tier = parseTier(event.package);
 
     if (!tier) {
+      console.log(`[GUEST_TRACE ${traceId}] join:invalid-tier`, { package: event.package });
       return res.status(500).json({ message: 'Event has invalid tier configuration' });
     }
 
@@ -445,6 +533,7 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
         );
 
       if (existingGuest.length > 0) {
+        console.log(`[GUEST_TRACE ${traceId}] join:returning-guest`, { eventId: event.id });
         return res.status(200).json({ message: 'Welcome back' });
       }
 
@@ -457,6 +546,11 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
 
       // 3. Prevent new joins if gallery is full
       if (currentGuestCount >= TIER_LIMITS[tier].maxGuests) {
+        console.log(`[GUEST_TRACE ${traceId}] join:gallery-full`, {
+          eventId: event.id,
+          currentGuestCount,
+          maxGuests: TIER_LIMITS[tier].maxGuests,
+        });
         return res.status(403).json({ message: 'Gallery Full' });
       }
 
@@ -468,9 +562,10 @@ router.post('/:slug/join', async (req: Request, res: Response) => {
     }
 
     // Return OK
+    console.log(`[GUEST_TRACE ${traceId}] join:success`, { eventId: event.id, tier });
     res.status(200).json({ message: 'Joined successfully' });
   } catch (error) {
-    console.error('Error joining event:', error);
+    console.error(`[GUEST_TRACE ${traceId}] join:error`, error);
     res.status(500).json({ message: 'Internal server error while joining event' });
   }
 });

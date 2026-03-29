@@ -27,9 +27,12 @@ app.use('/api/host', hostRoutes);
 app.use('/api/payments', paymentRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
+const healthHandler = (_req: express.Request, res: express.Response) => {
   res.json({ status: 'ok' });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Start server
 const PORT = Number(process.env.PORT) || 4000;
