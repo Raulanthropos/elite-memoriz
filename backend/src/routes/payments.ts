@@ -166,7 +166,7 @@ router.post('/checkout-sessions', async (req: AuthRequest, res: Response) => {
     await ensureHostProfile(userId, userEmail);
 
     const stripe = getStripeClient();
-    const frontendUrl = getFrontendAppUrl();
+    const frontendUrl = getFrontendAppUrl(req.get('origin'));
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: userId,

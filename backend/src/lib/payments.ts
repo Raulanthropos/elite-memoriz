@@ -38,7 +38,54 @@ export const getStripeWebhookSecret = () => getRequiredEnv('STRIPE_WEBHOOK_SECRE
 
 export const getStripePriceId = (tier: Tier) => getRequiredEnv(STRIPE_PRICE_ID_ENV[tier]);
 
-export const getFrontendAppUrl = () => getRequiredEnv('FRONTEND_URL').replace(/\/+$/, '');
+const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
+
+const isPrivateIpv4Hostname = (hostname: string) => {
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return true;
+  }
+
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return true;
+  }
+
+  const match = hostname.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+  if (!match) {
+    return false;
+  }
+
+  const secondOctet = Number(match[1]);
+  return secondOctet >= 16 && secondOctet <= 31;
+};
+
+const isDevelopmentFrontendOrigin = (origin: string) => {
+  try {
+    const url = new URL(origin);
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return false;
+    }
+
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+      hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || isPrivateIpv4Hostname(hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const getFrontendAppUrl = (requestOrigin?: string | null) => {
+  if (process.env.NODE_ENV !== 'production' && requestOrigin && isDevelopmentFrontendOrigin(requestOrigin)) {
+    return normalizeUrl(requestOrigin);
+  }
+
+  return normalizeUrl(getRequiredEnv('FRONTEND_URL'));
+};
 
 export const getCreationPathForTier = (tier: Tier) =>
   `/create-event?tier=${encodeURIComponent(tier)}&source=payment`;
