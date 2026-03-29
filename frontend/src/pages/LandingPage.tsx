@@ -202,8 +202,8 @@ const LandingPage = () => {
             </button>
           </div>
 
-          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <div className="flex items-center rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center self-end rounded-full border border-stone-300 bg-white p-1 shadow-sm sm:self-auto">
               <button
                 type="button"
                 onClick={() => setLanguage('el')}
@@ -222,7 +222,7 @@ const LandingPage = () => {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="inline-flex whitespace-nowrap rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 sm:px-4 sm:py-2 sm:text-sm"
+              className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 sm:min-w-0 sm:px-4 sm:py-2"
             >
               {pageCopy.nav.login}
             </button>
