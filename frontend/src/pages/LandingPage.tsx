@@ -187,10 +187,10 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-[#f7f2e8] text-stone-900 selection:bg-amber-200">
       <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[#f7f2e8]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-start justify-between px-4 py-4 sm:items-center sm:px-6 lg:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-900/70">Elite Memoriz</p>
-            <p className="text-lg font-semibold text-stone-900">Private event memories</p>
+            <p className="text-sm font-semibold leading-tight text-stone-900 sm:text-lg">Private event memories</p>
           </div>
 
           <div className="hidden items-center gap-8 text-sm font-medium text-stone-600 lg:flex">
@@ -202,7 +202,7 @@ const LandingPage = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center rounded-full border border-stone-300 bg-white p-1 shadow-sm">
               <button
                 type="button"
@@ -222,7 +222,7 @@ const LandingPage = () => {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="inline-flex whitespace-nowrap rounded-full border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 sm:px-4 sm:text-sm"
+              className="inline-flex whitespace-nowrap rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 sm:px-4 sm:py-2 sm:text-sm"
             >
               {pageCopy.nav.login}
             </button>
