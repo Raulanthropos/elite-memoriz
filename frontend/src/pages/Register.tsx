@@ -6,6 +6,7 @@ import { API_URL } from '../lib/config';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
+import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
 
 const copy = {
   el: {
@@ -62,11 +63,8 @@ const Register = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedRedirect = searchParams.get('redirect');
-  const redirectPath =
-    requestedRedirect && requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
-      ? requestedRedirect
-      : '/dashboard';
-  const emailRedirectTo = `${window.location.origin}/login?redirect=${encodeURIComponent(redirectPath)}`;
+  const redirectPath = sanitizeRedirectPath(requestedRedirect);
+  const emailRedirectTo = getEmailRedirectUrl(requestedRedirect);
 
   const pageCopy = copy[language];
   const passwordRequirements = getPasswordRequirements(password);
@@ -75,6 +73,33 @@ const Register = () => {
   useEffect(() => {
     setStoredPublicLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const syncAuthenticatedUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (isActive && session) {
+        navigate(redirectPath, { replace: true });
+      }
+    };
+
+    void syncAuthenticatedUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        navigate(redirectPath, { replace: true });
+      }
+    });
+
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate, redirectPath]);
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
