@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_URL } from '../lib/config';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
 
@@ -182,7 +182,16 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6">
       <div className="mx-auto max-w-md">
-        <div className="mb-6 flex justify-end">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 transition-colors hover:text-white"
+          >
+            <ArrowLeft size={16} />
+            <span>{language === 'el' ? 'Επιστροφή στην αρχική' : 'Back to home'}</span>
+          </button>
+
           <PublicLanguageToggle language={language} onChange={setLanguage} />
         </div>
 

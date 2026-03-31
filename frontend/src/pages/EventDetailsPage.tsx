@@ -21,6 +21,69 @@ interface Memory {
   likes: number;
 }
 
+interface EventDetailsSummary {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  package: string;
+  expiresAt?: string | null;
+}
+
+const getExpirationLabel = (expiresAtValue: string | null | undefined) => {
+  if (!expiresAtValue) {
+    return null;
+  }
+
+  const expiresAt = new Date(expiresAtValue);
+  if (Number.isNaN(expiresAt.getTime())) {
+    return null;
+  }
+
+  const diffMs = expiresAt.getTime() - Date.now();
+  if (diffMs <= 0) {
+    return null;
+  }
+
+  const absoluteDiffMs = diffMs;
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+  const weekMs = 7 * dayMs;
+  const monthMs = 30 * dayMs;
+  const isExpiringSoon = diffMs < weekMs;
+
+  let value: number;
+  let unit: string;
+
+  if (absoluteDiffMs >= monthMs) {
+    value = Math.max(1, Math.floor(absoluteDiffMs / monthMs));
+    unit = value === 1 ? 'month' : 'months';
+  } else if (absoluteDiffMs >= weekMs) {
+    value = Math.max(1, Math.ceil(absoluteDiffMs / weekMs));
+    unit = value === 1 ? 'week' : 'weeks';
+  } else if (absoluteDiffMs >= dayMs) {
+    value = Math.max(1, Math.ceil(absoluteDiffMs / dayMs));
+    unit = value === 1 ? 'day' : 'days';
+  } else if (absoluteDiffMs >= hourMs) {
+    value = Math.max(1, Math.ceil(absoluteDiffMs / hourMs));
+    unit = value === 1 ? 'hour' : 'hours';
+  } else {
+    value = Math.max(1, Math.ceil(absoluteDiffMs / minuteMs));
+    unit = value === 1 ? 'minute' : 'minutes';
+  }
+
+  return {
+    exactDate: expiresAt.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    isExpiringSoon,
+    text: `Expires in ${value} ${unit}`,
+  };
+};
+
 const renderMemoryPreview = (memory: Memory, className: string) => {
   const mediaUrl = getImageUrl(memory.storagePath);
 
@@ -330,7 +393,7 @@ const EventDetailsPage = () => {
   const [showQR, setShowQR] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [isAdmin, setIsAdmin] = useState(false); // NEW: Admin Check
-  const [eventData, setEventData] = useState<any>(null);
+  const [eventData, setEventData] = useState<EventDetailsSummary | null>(null);
   const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
 
   const refreshEventMemories = async () => {
@@ -706,6 +769,7 @@ const EventDetailsPage = () => {
             {/* Dynamic Event Banner */}
             {eventData && (() => {
                  const tierBadge = getTierBannerBadge(eventData.package);
+                 const expiration = getExpirationLabel(eventData.expiresAt);
                  return (
                  <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-gray-900 border border-gray-800 rounded-xl">
                     <span className="text-sm font-semibold text-gray-400">Event Details:</span>
@@ -727,6 +791,22 @@ const EventDetailsPage = () => {
                     <span className="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-xs font-medium capitalize border border-gray-700">
                         {eventData.category}
                     </span>
+
+                    {expiration && (
+                      <>
+                        <span className="text-gray-600 block h-4 w-px bg-gray-700"></span>
+                        <span
+                          className={`px-3 py-1 rounded-full border text-xs font-semibold ${
+                            expiration.isExpiringSoon
+                              ? 'border-rose-800/70 bg-rose-950/60 text-rose-200'
+                              : 'border-amber-800/70 bg-amber-950/60 text-amber-200'
+                          }`}
+                          title={`Expires on ${expiration.exactDate}`}
+                        >
+                          {expiration.text}
+                        </span>
+                      </>
+                    )}
                  </div>
                  );
             })()}
