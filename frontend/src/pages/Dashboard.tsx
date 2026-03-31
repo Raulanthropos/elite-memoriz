@@ -67,12 +67,12 @@ const Dashboard = () => {
             <p className="mt-2 text-gray-400">View and manage your event albums</p>
           </div>
           <div className="flex gap-4">
-            <button 
+            {/* <button 
               onClick={() => navigate('/create-event')}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-bold text-white transition-colors shadow-lg shadow-indigo-500/20"
             >
               + Create New Event
-            </button>
+            </button> */}
             <button 
               onClick={() => supabase.auth.signOut().then(() => window.location.href = '/login')}
               className="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors"
