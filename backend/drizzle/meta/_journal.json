@@ -29,6 +29,13 @@
       "when": 1774732510132,
       "tag": "0004_stripe_checkout",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775328689469,
+      "tag": "0005_profiles_email_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { 
+import {
   pgTable, 
   serial, 
   text, 
@@ -7,7 +7,8 @@ import {
   boolean, 
   varchar, 
   uuid,
-  index
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { TIERS } from '../lib/tiers';
@@ -16,14 +17,20 @@ import { TIERS } from '../lib/tiers';
 export const packageTiers = TIERS;
 export const paymentStatuses = ['PENDING', 'PAID', 'FAILED', 'EXPIRED'] as const;
 
-export const profiles = pgTable('profiles', {
-  // FIX: Use uuid, not serial. This ID matches auth.users.id directly.
-  id: uuid('id').primaryKey().notNull(), 
-  email: text('email').notNull(),
-  role: text('role', { enum: ['admin', 'host'] }).default('host').notNull(),
-  tier: text('tier', { enum: packageTiers }).default('BASIC').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
+export const profiles = pgTable(
+  'profiles',
+  {
+    // FIX: Use uuid, not serial. This ID matches auth.users.id directly.
+    id: uuid('id').primaryKey().notNull(),
+    email: text('email').notNull(),
+    role: text('role', { enum: ['admin', 'host'] }).default('host').notNull(),
+    tier: text('tier', { enum: packageTiers }).default('BASIC').notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    profilesEmailUniqueIdx: uniqueIndex('profiles_email_unique_idx').on(table.email),
+  })
+);
 
 export const events = pgTable('events', {
   id: uuid('id').defaultRandom().primaryKey(), // Better to use UUID for events too

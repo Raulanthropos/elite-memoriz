@@ -18,7 +18,12 @@ router.use(authMiddleware);
 router.post('/register-profile', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { email } = req.body;
+    const email = req.user!.email.trim().toLowerCase();
+
+    if (!email) {
+      console.warn('Profile creation blocked: authenticated user is missing email', { userId });
+      return res.status(400).json({ message: 'Unable to create host profile without an email address.' });
+    }
 
     // Check if exists
     const existing = await db.query.profiles.findFirst({
@@ -29,6 +34,19 @@ router.post('/register-profile', async (req: AuthRequest, res: Response) => {
         return res.json(existing);
     }
 
+    const existingByEmail = await db.query.profiles.findFirst({
+        where: eq(schema.profiles.email, email)
+    });
+
+    if (existingByEmail) {
+        console.warn('Profile creation blocked: email already belongs to another profile', {
+          userId,
+          existingProfileId: existingByEmail.id,
+          email,
+        });
+        return res.status(409).json({ message: 'A host account already exists for this email.' });
+    }
+
     const [newProfile] = await db.insert(schema.profiles).values({
         id: userId,
         email,
@@ -37,7 +55,16 @@ router.post('/register-profile', async (req: AuthRequest, res: Response) => {
     }).returning();
 
     res.status(201).json(newProfile);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      console.warn('Profile creation hit unique constraint', {
+        userId: req.user?.id,
+        email: req.user?.email ?? null,
+        constraint: error?.constraint ?? null,
+      });
+      return res.status(409).json({ message: 'A host account already exists for this email.' });
+    }
+
     console.error('Profile creation error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }

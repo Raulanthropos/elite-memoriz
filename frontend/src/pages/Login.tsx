@@ -7,6 +7,7 @@ import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage }
 import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
+import { isExistingAccountError, normalizeAuthEmail } from '../lib/authEmail';
 
 const copy = {
   el: {
@@ -33,7 +34,8 @@ const copy = {
       number: 'Τουλάχιστον 1 αριθμό',
       symbol: 'Τουλάχιστον 1 σύμβολο',
     } as Record<PasswordRequirementKey, string>,
-    checkEmail: 'Έλεγξε το email σου για το confirmation link!',
+    checkEmail: 'Αν το email είναι νέο, έλεγξε το inbox σου για το confirmation link. Αν υπάρχει ήδη λογαριασμός, κάνε σύνδεση ή reset κωδικού.',
+    existingAccountHint: 'Αν υπάρχει ήδη λογαριασμός με αυτό το email, κάνε σύνδεση ή reset κωδικού.',
   },
   en: {
     brand: 'Elite Memoriz',
@@ -59,7 +61,8 @@ const copy = {
       number: 'At least 1 number',
       symbol: 'At least 1 symbol',
     } as Record<PasswordRequirementKey, string>,
-    checkEmail: 'Check your email for the confirmation link!',
+    checkEmail: 'If this email is new, check your inbox for the confirmation link. If an account already exists, sign in or reset your password.',
+    existingAccountHint: 'If an account already exists for this email, sign in or reset your password.',
   },
 } as const;
 
@@ -118,6 +121,7 @@ const Login = () => {
     setError(null);
 
     try {
+      const normalizedEmail = normalizeAuthEmail(email);
       if (isRegistering) {
         if (password !== confirmPassword) {
           throw new Error(pageCopy.mismatch);
@@ -128,7 +132,7 @@ const Login = () => {
         }
 
         const { data, error: authError } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             emailRedirectTo,
@@ -143,14 +147,14 @@ const Login = () => {
           const response = await fetch(`${API_URL}/api/host/register-profile`, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
               Authorization: `Bearer ${data.session.access_token}`,
             },
-            body: JSON.stringify({ email }),
           });
 
           if (!response.ok) {
-            console.error('Profile creation failed, but auth succeeded');
+            const errorData = await response.json().catch(() => null);
+            await supabase.auth.signOut();
+            throw new Error(errorData?.message || 'Profile creation failed. Please try signing in instead.');
           }
 
           navigate(redirectPath, { replace: true });
@@ -160,7 +164,7 @@ const Login = () => {
         }
       } else {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
         });
 
@@ -173,7 +177,7 @@ const Login = () => {
         }
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(isExistingAccountError(err?.message) ? pageCopy.existingAccountHint : err.message);
     } finally {
       setLoading(false);
     }

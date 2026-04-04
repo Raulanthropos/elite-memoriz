@@ -1,6 +1,6 @@
 {
-  "id": "9521bf33-103c-4da7-9729-4549401a7b36",
-  "prevId": "25c9f777-f08e-4910-b7eb-720e2fdadd81",
+  "id": "a7634052-7509-4b38-994f-6734ddcdcefb",
+  "prevId": "9521bf33-103c-4da7-9729-4549401a7b36",
   "version": "5",
   "dialect": "pg",
   "tables": {
@@ -443,7 +443,15 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "profiles_email_unique_idx": {
+          "name": "profiles_email_unique_idx",
+          "columns": [
+            "email"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
