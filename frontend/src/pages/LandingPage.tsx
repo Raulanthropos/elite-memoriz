@@ -49,6 +49,12 @@ const copy = {
       'Preview των πακέτων στην αρχική και τελική επιλογή μέσα στο Create Event',
       'Διαφορετικά όρια σε καλεσμένους, storage και διάρκεια διατήρησης ανά πακέτο',
     ],
+    experienceCards: [
+      ['Private access', 'Οι καλεσμένοι μπαίνουν σε προστατευμένο χώρο χωρίς να χάνεται η απλότητα του flow.'],
+      ['Host-first control', 'Ο host κρατά τον έλεγχο του event, του πακέτου και της τελικής ενεργοποίησης.'],
+      ['Live gallery', 'Το υλικό συγκεντρώνεται σε ένα καθαρό album που γεμίζει ζωντανά κατά τη διάρκεια του event.'],
+      ['Καθαρή επιλογή πακέτου', 'Ο επισκέπτης καταλαβαίνει άμεσα τι περιλαμβάνει κάθε tier και ποιο βήμα ακολουθεί.'],
+    ],
     pricingTitle: 'Δες τα πακέτα και συνέχισε στο Create Event',
     pricingBody:
       'Κάθε πακέτο καλύπτει ένα hosted event. Εδώ βλέπεις τις διαφορές των tiers και μέσα στο Create Event κάνεις την τελική επιλογή.',
@@ -120,6 +126,12 @@ const copy = {
       'Private access through QR or direct link',
       'Plan previews on the homepage, with the final choice made inside Create Event',
       'Different guest, storage, and retention limits across plans',
+    ],
+    experienceCards: [
+      ['Private access', 'Guests enter a protected space without adding friction to the sharing flow.'],
+      ['Host-first control', 'The host stays in control of the event, the selected plan, and the final activation steps.'],
+      ['Live gallery', 'Memories collect inside one clean album that fills in real time during the event.'],
+      ['Clear plan choice', 'Visitors should understand what each tier includes and what the next step will be.'],
     ],
     pricingTitle: 'Review the plans and continue into Create Event',
     pricingBody:
@@ -393,15 +405,8 @@ const LandingPage = () => {
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              {[
-                ['Private access', Lock],
-                ['Host-first control', Users],
-                ['Live gallery', Image],
-                ['Clear plan choice', Sparkles],
-              ].map(([fallbackTitle, Icon], index) => {
-                const title = pageCopy.promises[index]?.[0] ?? fallbackTitle;
-                const description = pageCopy.promises[index]?.[1] ?? '';
-                const CardIcon = Icon as typeof Lock;
+              {pageCopy.experienceCards.map(([title, description], index) => {
+                const CardIcon = [Lock, Users, Image, Sparkles][index] as typeof Lock;
                 return (
                   <div key={title} className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-lg shadow-stone-200/40">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-900">
