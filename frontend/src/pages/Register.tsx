@@ -11,7 +11,7 @@ import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
 const copy = {
   el: {
     title: 'Δημιούργησε Host Account',
-    subtitle: 'Το επόμενο βήμα μετά την εγγραφή θα είναι το payment page.',
+    subtitle: 'Μετά την εγγραφή θα συνεχίσεις κατευθείαν στο payment.',
     email: 'Email',
     password: 'Κωδικός',
     confirm: 'Επιβεβαίωση',
@@ -32,7 +32,7 @@ const copy = {
   },
   en: {
     title: 'Create Host Account',
-    subtitle: 'The next step after registration will be the payment page.',
+    subtitle: 'After registration you will continue straight to payment.',
     email: 'Email',
     password: 'Password',
     confirm: 'Confirm',

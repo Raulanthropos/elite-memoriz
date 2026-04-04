@@ -30,10 +30,10 @@ const copy = {
     steps: { details: 'Στοιχεία', plan: 'Πακέτο' },
     bannerGuestTitle: 'Στήσε πρώτα το event και μετά δημιούργησε host account.',
     bannerGuestBody:
-      'Συμπλήρωσε τα στοιχεία και διάλεξε πακέτο εδώ. Μετά θα δημιουργήσεις hosting account και θα συνεχίσεις στο payment step μόλις ενεργοποιηθεί.',
+      'Συμπλήρωσε τα στοιχεία και διάλεξε πακέτο εδώ. Μετά θα δημιουργήσεις host account και θα συνεχίσεις κατευθείαν στο payment.',
     bannerHostTitle: 'Το event draft είναι έτοιμο για ολοκλήρωση.',
     bannerHostBody:
-      'Το payment step θα μπει τελευταίο. Προς το παρόν, αν είσαι συνδεδεμένος, μπορείς να ολοκληρώσεις το event από εδώ.',
+      'Αν το πακέτο σου έχει ήδη ξεκλειδωθεί, μπορείς να ολοκληρώσεις το event από εδώ. Διαφορετικά, το επόμενο βήμα είναι το payment.',
     title: 'Δημιουργία Νέου Event',
     detailsHint: 'Σε αυτό το βήμα συμπληρώνεις τα βασικά στοιχεία. Το πακέτο επιλέγεται αμέσως μετά.',
     eventName: 'Όνομα event',
@@ -50,7 +50,7 @@ const copy = {
     choosePlan: 'Επίλεξε Πακέτο',
     choosePlanGuestBody: 'Διάλεξε πακέτο και συνέχισε στο registration. Το payment θα είναι το επόμενο βήμα.',
     choosePlanHostBody: 'Διάλεξε πακέτο για αυτό το event και ολοκλήρωσε τη δημιουργία.',
-    draftNotice: 'Θα αποθηκευτεί το draft, θα δημιουργήσεις host account και μετά θα περάσεις στο payment page placeholder.',
+    draftNotice: 'Θα αποθηκευτεί το draft, θα δημιουργήσεις host account και μετά θα συνεχίσεις στο payment.',
     continueRegistration: 'Συνέχεια στο Host Registration',
     creating: 'Δημιουργία...',
     createEvent: 'Δημιούργησε Event',
@@ -84,10 +84,10 @@ const copy = {
     steps: { details: 'Details', plan: 'Plan' },
     bannerGuestTitle: 'Build the event first, then create the host account.',
     bannerGuestBody:
-      'Fill in the event details and choose a plan here. After that you will create the hosting account and continue into the payment step once it is enabled.',
+      'Fill in the event details and choose a plan here. After that you will create the host account and continue straight to payment.',
     bannerHostTitle: 'Your event draft is ready to complete.',
     bannerHostBody:
-      'The payment step will be added last. For now, signed-in hosts can finish creating the event from here.',
+      'If your tier is already unlocked, you can finish creating the event here. Otherwise, payment is the next step.',
     title: 'Create New Event',
     detailsHint: 'This step is for the core event details. The plan is chosen right after this.',
     eventName: 'Event name',
@@ -104,7 +104,7 @@ const copy = {
     choosePlan: 'Choose a Plan',
     choosePlanGuestBody: 'Choose a plan and continue to registration. Payment will be the next step.',
     choosePlanHostBody: 'Choose the package for this event and complete the setup.',
-    draftNotice: 'This draft will be saved, then you will create the host account and continue to the payment placeholder page.',
+    draftNotice: 'This draft will be saved, then you will create the host account and continue to payment.',
     continueRegistration: 'Continue to Host Registration',
     creating: 'Creating...',
     createEvent: 'Create Event',
