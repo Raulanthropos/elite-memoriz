@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
-import { fetchCheckoutSessionStatus, type CheckoutSessionStatus } from '../lib/payments';
+import {
+  fetchCheckoutSessionStatus,
+  fetchPurchaseStatus,
+  type CheckoutSessionStatus,
+} from '../lib/payments';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 
 const copy = {
@@ -11,48 +15,66 @@ const copy = {
     titlePaid: 'Η πληρωμή επιβεβαιώθηκε',
     titlePending: 'Η πληρωμή επεξεργάζεται ακόμη',
     titleFailed: 'Δεν υπάρχει επιβεβαιωμένη πληρωμή ακόμη',
-    checkingBody: 'Ελέγχουμε το backend και περιμένουμε το verified webhook πριν προχωρήσεις.',
+    checkingBody: 'Ελέγχουμε το backend και περιμένουμε το verified payment state πριν προχωρήσεις.',
     pendingBody:
-      'Το Stripe redirect ολοκληρώθηκε, αλλά η εφαρμογή περιμένει ακόμη την επιβεβαίωση από το webhook. Θα ξαναδοκιμάσουμε αυτόματα.',
+      'Η εφαρμογή περιμένει ακόμη επιβεβαιωμένο backend αποτέλεσμα. Θα ξαναδοκιμάσουμε αυτόματα.',
     paidBody: 'Το πακέτο σου έχει ξεκλειδωθεί. Σε λίγο θα μεταφερθείς στη δημιουργία event.',
     failedBody:
-      'Αν η πληρωμή ακυρώθηκε ή έληξε, μπορείς να επιστρέψεις και να δοκιμάσεις ξανά με ασφάλεια.',
-    missingSession: 'Λείπει το session_id από το success URL.',
+      'Αν η πληρωμή ακυρώθηκε ή απέτυχε, μπορείς να επιστρέψεις στο payment και να δοκιμάσεις ξανά με ασφάλεια.',
+    missingReference: 'Λείπει το purchase_id ή το session_id από το success URL.',
     sessionStillOpen:
-      'Αυτό το Checkout Session είναι ακόμη open στο Stripe και δεν υπάρχει ολοκληρωμένη πληρωμή. Επέστρεψε στο Payment και ξεκίνησε νέα προσπάθεια.',
+      'Αυτό το legacy Checkout Session είναι ακόμη open στο Stripe και δεν υπάρχει ολοκληρωμένη πληρωμή.',
     continueCta: 'Συνέχεια στο Create Event',
     retryCta: 'Επιστροφή στο Payment',
     dashboardCta: 'Dashboard',
-    detailsLabel: 'Κατάσταση session',
+    detailsLabel: 'Κατάσταση πληρωμής',
+    methodLabel: 'Μέθοδος',
+    stripeLabel: 'Stripe',
+    selectedTierLabel: 'Επιλεγμένο πακέτο',
+    unlockedTierLabel: 'Ξεκλείδωτο πακέτο',
   },
   en: {
     titleChecking: 'Verifying your payment',
     titlePaid: 'Payment confirmed',
     titlePending: 'Payment is still processing',
     titleFailed: 'No confirmed payment yet',
-    checkingBody: 'We are checking the backend and waiting for the verified webhook before moving you forward.',
-    pendingBody:
-      'Stripe redirected back successfully, but the app is still waiting for webhook confirmation. We will retry automatically.',
+    checkingBody: 'We are checking the backend and waiting for verified payment state before moving you forward.',
+    pendingBody: 'The app is still waiting for confirmed backend payment state. We will retry automatically.',
     paidBody: 'Your tier has been unlocked. You will be sent to the event creation page in a moment.',
-    failedBody: 'If the payment was cancelled or expired, you can safely go back and try again.',
-    missingSession: 'The success URL is missing a session_id.',
-    sessionStillOpen:
-      'This Checkout Session is still open in Stripe and no completed payment exists for it yet. Go back to Payment and start a fresh attempt.',
+    failedBody: 'If the payment was cancelled or failed, you can safely go back and try again.',
+    missingReference: 'The success URL is missing either purchase_id or session_id.',
+    sessionStillOpen: 'This legacy Checkout Session is still open in Stripe and no completed payment exists for it.',
     continueCta: 'Continue to Create Event',
     retryCta: 'Back to Payment',
     dashboardCta: 'Dashboard',
-    detailsLabel: 'Session status',
+    detailsLabel: 'Payment status',
+    methodLabel: 'Method',
+    stripeLabel: 'Stripe',
+    selectedTierLabel: 'Selected tier',
+    unlockedTierLabel: 'Unlocked tier',
   },
 } as const;
 
 type VerificationState = 'checking' | 'pending' | 'paid' | 'failed';
+
+type PaymentDetails = {
+  paymentStatus: string;
+  selectedTier: string | null;
+  unlockedTier: string | null;
+  paymentMethodType: string | null;
+  creationPath: string | null;
+  isUnlocked: boolean;
+  stripeCheckoutStatus: string | null;
+  stripePaymentStatus: string | null;
+  stripePaymentIntentStatus: string | null;
+};
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [language, setLanguage] = useState<PublicLanguage>(getStoredPublicLanguage);
   const [verificationState, setVerificationState] = useState<VerificationState>('checking');
-  const [sessionStatus, setSessionStatus] = useState<CheckoutSessionStatus | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const pageCopy = copy[language];
@@ -62,11 +84,13 @@ const PaymentSuccess = () => {
   }, [language]);
 
   useEffect(() => {
+    const purchaseIdValue = searchParams.get('purchase_id')?.trim() || '';
+    const purchaseId = Number(purchaseIdValue);
     const sessionId = searchParams.get('session_id')?.trim() || '';
 
-    if (!sessionId) {
+    if ((!purchaseIdValue || !Number.isInteger(purchaseId) || purchaseId <= 0) && !sessionId) {
       setVerificationState('failed');
-      setError(pageCopy.missingSession);
+      setError(pageCopy.missingReference);
       return;
     }
 
@@ -74,30 +98,43 @@ const PaymentSuccess = () => {
     let retryTimeout: number | null = null;
     let redirectTimeout: number | null = null;
 
-    const verifyPayment = async () => {
+    const scheduleRetry = (callback: () => void) => {
+      retryTimeout = window.setTimeout(callback, 2500);
+    };
+
+    const handlePaidState = (creationPath: string | null) => {
+      setVerificationState('paid');
+      if (creationPath) {
+        redirectTimeout = window.setTimeout(() => {
+          navigate(creationPath, { replace: true });
+        }, 1200);
+      }
+    };
+
+    const verifyPurchase = async () => {
       try {
-        const nextStatus = await fetchCheckoutSessionStatus(sessionId);
+        const nextStatus = await fetchPurchaseStatus(purchaseId);
         if (cancelled) {
           return;
         }
 
-        setSessionStatus(nextStatus);
+        const nextDetails: PaymentDetails = {
+          paymentStatus: nextStatus.paymentStatus,
+          selectedTier: nextStatus.selectedTier,
+          unlockedTier: nextStatus.unlockedTier,
+          paymentMethodType: nextStatus.paymentMethodType,
+          creationPath: nextStatus.creationPath,
+          isUnlocked: nextStatus.isUnlocked,
+          stripeCheckoutStatus: nextStatus.stripeCheckoutStatus,
+          stripePaymentStatus: nextStatus.stripePaymentStatus,
+          stripePaymentIntentStatus: nextStatus.stripePaymentIntentStatus,
+        };
+
+        setPaymentDetails(nextDetails);
         setError(null);
 
         if (nextStatus.isUnlocked && nextStatus.creationPath) {
-          setVerificationState('paid');
-          redirectTimeout = window.setTimeout(() => {
-            navigate(nextStatus.creationPath!, { replace: true });
-          }, 1200);
-          return;
-        }
-
-        if (
-          nextStatus.stripeCheckoutStatus === 'open'
-          && nextStatus.stripePaymentStatus === 'unpaid'
-        ) {
-          setVerificationState('failed');
-          setError(pageCopy.sessionStillOpen);
+          handlePaidState(nextStatus.creationPath);
           return;
         }
 
@@ -106,10 +143,10 @@ const PaymentSuccess = () => {
           return;
         }
 
-        setVerificationState(nextStatus.paymentStatus === 'PAID' ? 'checking' : 'pending');
-        retryTimeout = window.setTimeout(() => {
-          void verifyPayment();
-        }, 2500);
+        setVerificationState('pending');
+        scheduleRetry(() => {
+          void verifyPurchase();
+        });
       } catch (nextError) {
         if (cancelled) {
           return;
@@ -120,7 +157,61 @@ const PaymentSuccess = () => {
       }
     };
 
-    void verifyPayment();
+    const verifyLegacyCheckoutSession = async () => {
+      try {
+        const nextStatus: CheckoutSessionStatus = await fetchCheckoutSessionStatus(sessionId);
+        if (cancelled) {
+          return;
+        }
+
+        setPaymentDetails({
+          paymentStatus: nextStatus.paymentStatus,
+          selectedTier: nextStatus.selectedTier,
+          unlockedTier: nextStatus.unlockedTier,
+          paymentMethodType: 'card',
+          creationPath: nextStatus.creationPath,
+          isUnlocked: nextStatus.isUnlocked,
+          stripeCheckoutStatus: nextStatus.stripeCheckoutStatus,
+          stripePaymentStatus: nextStatus.stripePaymentStatus,
+          stripePaymentIntentStatus: null,
+        });
+        setError(null);
+
+        if (nextStatus.isUnlocked && nextStatus.creationPath) {
+          handlePaidState(nextStatus.creationPath);
+          return;
+        }
+
+        if (nextStatus.stripeCheckoutStatus === 'open' && nextStatus.stripePaymentStatus === 'unpaid') {
+          setVerificationState('failed');
+          setError(pageCopy.sessionStillOpen);
+          return;
+        }
+
+        if (nextStatus.paymentStatus === 'FAILED' || nextStatus.paymentStatus === 'EXPIRED') {
+          setVerificationState('failed');
+          return;
+        }
+
+        setVerificationState('pending');
+        scheduleRetry(() => {
+          void verifyLegacyCheckoutSession();
+        });
+      } catch (nextError) {
+        if (cancelled) {
+          return;
+        }
+
+        setVerificationState('failed');
+        setError(nextError instanceof Error ? nextError.message : 'Payment verification failed');
+      }
+    };
+
+    if (purchaseIdValue && Number.isInteger(purchaseId) && purchaseId > 0) {
+      void verifyPurchase();
+    } else {
+      void verifyLegacyCheckoutSession();
+    }
 
     return () => {
       cancelled = true;
@@ -133,7 +224,7 @@ const PaymentSuccess = () => {
         window.clearTimeout(redirectTimeout);
       }
     };
-  }, [navigate, pageCopy.missingSession, pageCopy.sessionStillOpen, searchParams]);
+  }, [navigate, pageCopy.missingReference, pageCopy.sessionStillOpen, searchParams]);
 
   const title =
     verificationState === 'paid'
@@ -153,8 +244,7 @@ const PaymentSuccess = () => {
           ? pageCopy.failedBody
           : pageCopy.checkingBody;
 
-  const selectedTier = sessionStatus?.selectedTier;
-  const retryTier = selectedTier ? `/payment?tier=${encodeURIComponent(selectedTier)}` : '/payment';
+  const retryTier = paymentDetails?.selectedTier ? `/payment?tier=${encodeURIComponent(paymentDetails.selectedTier)}` : '/payment';
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">
@@ -189,7 +279,7 @@ const PaymentSuccess = () => {
             </div>
           </div>
 
-          {sessionStatus && (
+          {paymentDetails && (
             <div className="mt-8 rounded-2xl border border-gray-800 bg-gray-950/70 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">
                 {pageCopy.detailsLabel}
@@ -197,24 +287,32 @@ const PaymentSuccess = () => {
               <div className="mt-4 grid gap-3 text-sm text-gray-300 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                   <span className="text-gray-500">Payment</span>
-                  <p className="mt-1 font-semibold text-white">{sessionStatus.paymentStatus}</p>
+                  <p className="mt-1 font-semibold text-white">{paymentDetails.paymentStatus}</p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
-                  <span className="text-gray-500">Stripe</span>
-                  <p className="mt-1 font-semibold text-white">
-                    {sessionStatus.stripeCheckoutStatus || 'unknown'} / {sessionStatus.stripePaymentStatus || 'unknown'}
-                  </p>
+                  <span className="text-gray-500">{pageCopy.methodLabel}</span>
+                  <p className="mt-1 font-semibold text-white">{paymentDetails.paymentMethodType || 'unknown'}</p>
                 </div>
-                {selectedTier && (
+                {(paymentDetails.stripePaymentIntentStatus || paymentDetails.stripeCheckoutStatus || paymentDetails.stripePaymentStatus) && (
                   <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
-                    <span className="text-gray-500">Selected tier</span>
-                    <p className="mt-1 font-semibold text-white">{selectedTier}</p>
+                    <span className="text-gray-500">{pageCopy.stripeLabel}</span>
+                    <p className="mt-1 font-semibold text-white">
+                      {paymentDetails.stripePaymentIntentStatus
+                        || [paymentDetails.stripeCheckoutStatus, paymentDetails.stripePaymentStatus].filter(Boolean).join(' / ')
+                        || 'unknown'}
+                    </p>
                   </div>
                 )}
-                {sessionStatus.unlockedTier && (
+                {paymentDetails.selectedTier && (
                   <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
-                    <span className="text-gray-500">Unlocked tier</span>
-                    <p className="mt-1 font-semibold text-white">{sessionStatus.unlockedTier}</p>
+                    <span className="text-gray-500">{pageCopy.selectedTierLabel}</span>
+                    <p className="mt-1 font-semibold text-white">{paymentDetails.selectedTier}</p>
+                  </div>
+                )}
+                {paymentDetails.unlockedTier && (
+                  <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
+                    <span className="text-gray-500">{pageCopy.unlockedTierLabel}</span>
+                    <p className="mt-1 font-semibold text-white">{paymentDetails.unlockedTier}</p>
                   </div>
                 )}
               </div>
@@ -222,10 +320,10 @@ const PaymentSuccess = () => {
           )}
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            {verificationState === 'paid' && sessionStatus?.creationPath && (
+            {verificationState === 'paid' && paymentDetails?.creationPath && (
               <button
                 type="button"
-                onClick={() => navigate(sessionStatus.creationPath!, { replace: true })}
+                onClick={() => navigate(paymentDetails.creationPath!, { replace: true })}
                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
               >
                 {pageCopy.continueCta}

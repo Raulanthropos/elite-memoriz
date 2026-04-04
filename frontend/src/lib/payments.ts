@@ -9,8 +9,31 @@ export type PaymentOverview = {
   entitledTier: Tier | null;
   latestSelectedTier: Tier | null;
   latestPaymentStatus: PaymentOverviewStatus;
+  latestPurchaseId: number | null;
   latestCheckoutSessionId: string | null;
+  latestPaymentIntentId: string | null;
+  latestPaymentMethodType: string | null;
   creationPath: string | null;
+};
+
+export type PaymentQuote = {
+  tier: Tier;
+  amount: number;
+  currency: string;
+  customPaymentMethodType: string;
+};
+
+export type PurchaseStatus = {
+  purchaseId: number;
+  selectedTier: Tier | null;
+  unlockedTier: Tier | null;
+  paymentStatus: Exclude<PaymentOverviewStatus, 'NOT_STARTED'>;
+  paymentMethodType: string;
+  isUnlocked: boolean;
+  creationPath: string | null;
+  stripeCheckoutStatus: string | null;
+  stripePaymentStatus: string | null;
+  stripePaymentIntentStatus: string | null;
 };
 
 export type CheckoutSessionStatus = {
@@ -30,6 +53,15 @@ type PaymentOverviewResponse = Omit<PaymentOverview, 'entitledTier' | 'latestSel
 };
 
 type CheckoutSessionStatusResponse = Omit<CheckoutSessionStatus, 'selectedTier' | 'unlockedTier'> & {
+  selectedTier: string | null;
+  unlockedTier: string | null;
+};
+
+type PaymentQuoteResponse = Omit<PaymentQuote, 'tier'> & {
+  tier: string;
+};
+
+type PurchaseStatusResponse = Omit<PurchaseStatus, 'selectedTier' | 'unlockedTier'> & {
   selectedTier: string | null;
   unlockedTier: string | null;
 };
@@ -75,6 +107,81 @@ export const fetchPaymentOverview = async (): Promise<PaymentOverview> => {
     ...payload,
     entitledTier: parseNullableTier(payload.entitledTier),
     latestSelectedTier: parseNullableTier(payload.latestSelectedTier),
+  };
+};
+
+export const fetchPaymentQuote = async (tier: Tier): Promise<PaymentQuote> => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_URL}/api/payments/quote?tier=${encodeURIComponent(tier)}`, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const payload = await parseJsonResponse<PaymentQuoteResponse>(response);
+
+  return {
+    ...payload,
+    tier: parseNullableTier(payload.tier) ?? tier,
+  };
+};
+
+export const createPaymentIntent = async (tier: Tier) => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_URL}/api/payments/payment-intents`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tier }),
+  });
+
+  return parseJsonResponse<{
+    purchaseId: number;
+    paymentIntentId: string;
+    clientSecret: string | null;
+    amount: number;
+    currency: string;
+  }>(response);
+};
+
+export const createCustomPaymentAttempt = async (tier: Tier, paymentMethodType: string) => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_URL}/api/payments/custom-payment-attempts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tier, paymentMethodType }),
+  });
+
+  return parseJsonResponse<{
+    purchaseId?: number;
+    message: string;
+  }>(response);
+};
+
+export const fetchPurchaseStatus = async (purchaseId: number): Promise<PurchaseStatus> => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(
+    `${API_URL}/api/payments/purchase-status?purchase_id=${encodeURIComponent(String(purchaseId))}`,
+    {
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  const payload = await parseJsonResponse<PurchaseStatusResponse>(response);
+
+  return {
+    ...payload,
+    selectedTier: parseNullableTier(payload.selectedTier),
+    unlockedTier: parseNullableTier(payload.unlockedTier),
   };
 };
 

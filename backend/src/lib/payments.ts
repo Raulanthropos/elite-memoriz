@@ -7,6 +7,11 @@ import { parseNullableTier, parseTier, type Tier } from './tiers';
 export type PaymentStatus = (typeof schema.paymentStatuses)[number];
 export type PaymentOverviewStatus = PaymentStatus | 'NOT_STARTED';
 export type PaymentPurchaseRecord = typeof schema.paymentPurchases.$inferSelect;
+export type TierPriceQuote = {
+  amount: number;
+  currency: string;
+  priceId: string;
+};
 
 const STRIPE_PRICE_ID_ENV: Record<Tier, string> = {
   BASIC: 'STRIPE_PRICE_ID_BASIC',
@@ -15,6 +20,7 @@ const STRIPE_PRICE_ID_ENV: Record<Tier, string> = {
 };
 
 let stripeClient: Stripe | null = null;
+const tierPriceCache = new Map<Tier, TierPriceQuote>();
 
 const getRequiredEnv = (name: string) => {
   const value = process.env[name]?.trim();
@@ -37,6 +43,28 @@ export const getStripeClient = () => {
 export const getStripeWebhookSecret = () => getRequiredEnv('STRIPE_WEBHOOK_SECRET');
 
 export const getStripePriceId = (tier: Tier) => getRequiredEnv(STRIPE_PRICE_ID_ENV[tier]);
+
+export const getStripeTierPrice = async (tier: Tier): Promise<TierPriceQuote> => {
+  const cached = tierPriceCache.get(tier);
+  if (cached) {
+    return cached;
+  }
+
+  const price = await getStripeClient().prices.retrieve(getStripePriceId(tier));
+
+  if (price.type !== 'one_time' || price.unit_amount == null || !price.currency) {
+    throw new Error(`Stripe price ${price.id} must be a one-time price with unit_amount and currency`);
+  }
+
+  const nextQuote: TierPriceQuote = {
+    amount: price.unit_amount,
+    currency: price.currency,
+    priceId: price.id,
+  };
+
+  tierPriceCache.set(tier, nextQuote);
+  return nextQuote;
+};
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 
@@ -127,6 +155,26 @@ export const getPurchaseBySessionId = async (sessionId: string) => {
   return purchase ?? null;
 };
 
+export const getPurchaseByPaymentIntentId = async (paymentIntentId: string) => {
+  const [purchase] = await db
+    .select()
+    .from(schema.paymentPurchases)
+    .where(eq(schema.paymentPurchases.stripePaymentIntentId, paymentIntentId))
+    .limit(1);
+
+  return purchase ?? null;
+};
+
+export const getPurchaseById = async (purchaseId: number) => {
+  const [purchase] = await db
+    .select()
+    .from(schema.paymentPurchases)
+    .where(eq(schema.paymentPurchases.id, purchaseId))
+    .limit(1);
+
+  return purchase ?? null;
+};
+
 const getTierFromPurchaseRecord = (purchase: PaymentPurchaseRecord | null) => {
   if (!purchase) {
     return null;
@@ -150,7 +198,10 @@ export const getPaymentOverview = async (userId: string) => {
     entitledTier,
     latestSelectedTier,
     latestPaymentStatus: activePurchase?.paymentStatus ?? 'NOT_STARTED' as PaymentOverviewStatus,
+    latestPurchaseId: activePurchase?.id ?? null,
     latestCheckoutSessionId: activePurchase?.stripeCheckoutSessionId ?? null,
+    latestPaymentIntentId: activePurchase?.stripePaymentIntentId ?? null,
+    latestPaymentMethodType: activePurchase?.paymentMethodType ?? null,
     creationPath: entitledTier ? getCreationPathForTier(entitledTier) : null,
   };
 };
