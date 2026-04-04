@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { supabase } from './lib/supabase';
@@ -14,6 +14,7 @@ const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 const PaymentCancel = lazy(() => import('./pages/PaymentCancel'));
 const EventDetails = lazy(() => import('./pages/EventDetailsPage'));
 const ExitPage = lazy(() => import('./pages/ExitPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const GuestEventPage = lazy(() =>
   import('./pages/GuestEventPage').then((module) => ({ default: module.GuestEventPage }))
 );
@@ -91,7 +92,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </div>
