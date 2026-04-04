@@ -20,7 +20,6 @@ export type PaymentQuote = {
   tier: Tier;
   amount: number;
   currency: string;
-  customPaymentMethodType: string;
 };
 
 export type PurchaseStatus = {
@@ -144,23 +143,6 @@ export const createPaymentIntent = async (tier: Tier) => {
     clientSecret: string | null;
     amount: number;
     currency: string;
-  }>(response);
-};
-
-export const createCustomPaymentAttempt = async (tier: Tier, paymentMethodType: string) => {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${API_URL}/api/payments/custom-payment-attempts`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ tier, paymentMethodType }),
-  });
-
-  return parseJsonResponse<{
-    purchaseId?: number;
-    message: string;
   }>(response);
 };
 

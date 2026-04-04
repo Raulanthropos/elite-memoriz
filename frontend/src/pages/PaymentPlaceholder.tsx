@@ -6,7 +6,6 @@ import { loadStripe, type Appearance, type StripeElementsOptionsMode } from '@st
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { clearStoredCreateEventDraft, getStoredCreateEventDraft } from '../lib/createEventDraft';
 import {
-  createCustomPaymentAttempt,
   createPaymentIntent,
   fetchPaymentOverview,
   fetchPaymentQuote,
@@ -20,16 +19,6 @@ type DraftSummary = {
   title?: string;
   date?: string;
   package?: string;
-};
-
-type ElementsOptionsWithCustomMethods = StripeElementsOptionsMode & {
-  customPaymentMethods?: Array<{
-    id: string;
-    options: {
-      type: 'static';
-      subtitle?: string;
-    };
-  }>;
 };
 
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim() || '';
@@ -65,7 +54,7 @@ const copy = {
     eyebrow: 'Stripe Payment Element',
     title: 'Επιβεβαίωση πακέτου και ασφαλής πληρωμή',
     body:
-      'Η σελίδα πληρωμής πλέον μένει μέσα στην εφαρμογή. Υποστηρίζει κάρτα και IRIS επιλογή μέσα από το Stripe Payment Element, αλλά το ξεκλείδωμα γίνεται μόνο μετά από επιβεβαιωμένο backend state.',
+      'Η σελίδα πληρωμής πλέον μένει μέσα στην εφαρμογή. Προς το παρόν η ενσωμάτωση υποστηρίζει μόνο κάρτα μέσω Stripe Payment Element, ενώ το ξεκλείδωμα γίνεται μόνο μετά από επιβεβαιωμένο backend state.',
     pendingTitle: 'Υπάρχει πληρωμή που περιμένει επιβεβαίωση',
     pendingBody: 'Αν ολοκλήρωσες μόλις την πληρωμή, μπορείς να ξαναελέγξεις την κατάσταση χωρίς να ξεκινήσεις νέο attempt.',
     unlockedTitle: 'Το πακέτο σου έχει ήδη ξεκλειδωθεί',
@@ -83,12 +72,13 @@ const copy = {
     paymentStatus: 'Κατάσταση πληρωμής',
     paymentFormTitle: 'Στοιχεία πληρωμής',
     paymentFormBody:
-      'Για κάρτα, η πληρωμή επιβεβαιώνεται μέσω Stripe PaymentIntent και webhook. Για IRIS, η επιλογή εμφανίζεται μέσα στο ίδιο form.',
+      'Η πληρωμή με κάρτα επιβεβαιώνεται μέσω Stripe PaymentIntent και webhook. Το IRIS θα προστεθεί αργότερα όταν είναι έτοιμο το πραγματικό processor layer.',
     loadingStatus: 'Γίνεται έλεγχος κατάστασης πληρωμής...',
     loadingForm: 'Γίνεται φόρτωση ασφαλούς φόρμας πληρωμής...',
     payButton: 'Πληρωμή τώρα',
-    irisSubtitle: 'IRIS',
     missingStripeKey: 'Λείπει το VITE_STRIPE_PUBLISHABLE_KEY από το frontend env.',
+    irisTitle: 'IRIS',
+    irisBody: 'Θα ενεργοποιηθεί μόλις ολοκληρωθεί το πραγματικό IRIS processor / callback integration.',
     tiers: {
       BASIC: {
         name: 'Basic',
@@ -111,7 +101,7 @@ const copy = {
     eyebrow: 'Stripe Payment Element',
     title: 'Plan confirmation and secure payment',
     body:
-      'The payment step now stays inside the app. It supports card payments and an IRIS option through the Stripe Payment Element, while the backend remains the only source of truth for unlocking.',
+      'The payment step now stays inside the app. For now the integration supports card payments only through the Stripe Payment Element, while the backend remains the only source of truth for unlocking.',
     pendingTitle: 'A payment is still waiting for confirmation',
     pendingBody: 'If you just completed a payment, you can re-check that attempt instead of starting a new one.',
     unlockedTitle: 'Your tier is already unlocked',
@@ -129,12 +119,13 @@ const copy = {
     paymentStatus: 'Payment status',
     paymentFormTitle: 'Payment details',
     paymentFormBody:
-      'Card payments are confirmed through a Stripe PaymentIntent and webhook. The IRIS option is rendered inside the same form.',
+      'Card payments are confirmed through a Stripe PaymentIntent and webhook. IRIS will be added later once the real processor layer is ready.',
     loadingStatus: 'Loading payment status...',
     loadingForm: 'Loading secure payment form...',
     payButton: 'Pay now',
-    irisSubtitle: 'IRIS',
     missingStripeKey: 'Missing VITE_STRIPE_PUBLISHABLE_KEY in frontend env.',
+    irisTitle: 'IRIS',
+    irisBody: 'This will be enabled once the real IRIS processor and callback integration is ready.',
     tiers: {
       BASIC: {
         name: 'Basic',
@@ -194,16 +185,6 @@ const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps
         throw new Error(submitResult.error.message || 'Payment details are incomplete');
       }
 
-      const selectedPaymentMethod =
-        'selectedPaymentMethod' in submitResult && typeof submitResult.selectedPaymentMethod === 'string'
-          ? submitResult.selectedPaymentMethod
-          : null;
-
-      if (selectedPaymentMethod === quote.customPaymentMethodType) {
-        const response = await createCustomPaymentAttempt(tier, quote.customPaymentMethodType);
-        throw new Error(response.message);
-      }
-
       const paymentIntent = await createPaymentIntent(tier);
 
       if (!paymentIntent.clientSecret) {
@@ -255,9 +236,13 @@ const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps
               radios: 'always',
               spacedAccordionItems: false,
             },
-            paymentMethodOrder: ['card', quote.customPaymentMethodType],
           }}
         />
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-dashed border-gray-700 bg-gray-900/70 px-4 py-3 text-sm text-gray-300">
+        <p className="font-semibold text-white">{pageCopy.irisTitle}</p>
+        <p className="mt-1 leading-6 text-gray-400">{pageCopy.irisBody}</p>
       </div>
 
       {error && (
@@ -388,7 +373,7 @@ const PaymentPlaceholder = () => {
     return formatAmount(paymentQuote.amount, paymentQuote.currency, language);
   }, [language, paymentQuote, tierCopy.price]);
 
-  const elementsOptions = useMemo<ElementsOptionsWithCustomMethods | null>(() => {
+  const elementsOptions = useMemo<StripeElementsOptionsMode | null>(() => {
     if (!paymentQuote) {
       return null;
     }
@@ -398,18 +383,9 @@ const PaymentPlaceholder = () => {
       amount: paymentQuote.amount,
       currency: paymentQuote.currency,
       paymentMethodTypes: ['card'],
-      customPaymentMethods: [
-        {
-          id: paymentQuote.customPaymentMethodType,
-          options: {
-            type: 'static',
-            subtitle: pageCopy.irisSubtitle,
-          },
-        },
-      ],
       appearance: paymentElementAppearance,
     };
-  }, [pageCopy.irisSubtitle, paymentQuote]);
+  }, [paymentQuote]);
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">

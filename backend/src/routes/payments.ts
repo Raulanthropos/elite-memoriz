@@ -10,7 +10,6 @@ import {
   getFrontendAppUrl,
   getPaymentOverview,
   getPurchaseById,
-  getPurchaseByPaymentIntentId,
   getPurchaseBySessionId,
   getStripeClient,
   getStripePriceId,
@@ -22,7 +21,6 @@ import { parseNullableTier, parseTier, type Tier } from '../lib/tiers';
 const router = Router();
 
 const CARD_PAYMENT_METHOD_TYPE = 'card';
-const IRIS_CUSTOM_PAYMENT_METHOD_TYPE = 'cpmt_1TIaFmF7mffPVaPgJMaXAU0R';
 
 type PurchaseStatusUpdate = 'FAILED' | 'EXPIRED';
 
@@ -305,7 +303,6 @@ router.get('/quote', async (req: AuthRequest, res: Response) => {
       tier,
       amount: quote.amount,
       currency: quote.currency,
-      customPaymentMethodType: IRIS_CUSTOM_PAYMENT_METHOD_TYPE,
     });
   } catch (error) {
     console.error('Error fetching payment quote:', error);
@@ -370,29 +367,6 @@ router.post('/payment-intents', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error creating Stripe PaymentIntent:', error);
     res.status(500).json({ message: 'Failed to initialize payment' });
-  }
-});
-
-router.post('/custom-payment-attempts', async (req: AuthRequest, res: Response) => {
-  try {
-    const paymentMethodType = typeof req.body?.paymentMethodType === 'string' ? req.body.paymentMethodType.trim() : '';
-
-    if (paymentMethodType !== IRIS_CUSTOM_PAYMENT_METHOD_TYPE) {
-      return res.status(400).json({ message: 'Unsupported custom payment method' });
-    }
-
-    const tier = parseTier(req.body?.tier);
-    if (!tier) {
-      return res.status(400).json({ message: 'Invalid tier selection' });
-    }
-
-    return res.status(501).json({
-      message:
-        'IRIS was added to the Payment Element, but Stripe custom payment methods do not process funds by themselves. The repo still needs the actual IRIS processor redirect/callback integration before this option can complete a payment.',
-    });
-  } catch (error) {
-    console.error('Error starting custom payment attempt:', error);
-    res.status(500).json({ message: 'Failed to start custom payment' });
   }
 });
 
