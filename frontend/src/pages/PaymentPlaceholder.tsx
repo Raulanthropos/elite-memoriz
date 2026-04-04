@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Crown, Loader2, ShieldCheck, Star, Zap } from 'lucide-react';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
-import { loadStripe, type Appearance, type StripeElementsOptionsMode } from '@stripe/stripe-js';
+import { loadStripe, type Appearance } from '@stripe/stripe-js';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { clearStoredCreateEventDraft, getStoredCreateEventDraft } from '../lib/createEventDraft';
 import {
@@ -67,6 +67,8 @@ const copy = {
     changeTierNote: 'Αν θέλεις άλλο πακέτο, γύρνα πίσω στο draft και άλλαξέ το εκεί.',
     continueCreate: 'Συνέχεια στο Create Event',
     checkPending: 'Έλεγχος κατάστασης πληρωμής',
+    loadCardForm: 'Συνέχεια σε ασφαλή φόρμα κάρτας',
+    loadingCardForm: 'Γίνεται αρχικοποίηση της ασφαλούς φόρμας κάρτας...',
     backToDraft: 'Πίσω στο draft',
     dashboard: 'Dashboard',
     paymentStatus: 'Κατάσταση πληρωμής',
@@ -114,6 +116,8 @@ const copy = {
     changeTierNote: 'If you want a different tier, go back to the draft and change it there.',
     continueCreate: 'Continue to Create Event',
     checkPending: 'Check payment status',
+    loadCardForm: 'Continue to secure card form',
+    loadingCardForm: 'Initializing secure card form...',
     backToDraft: 'Back to draft',
     dashboard: 'Dashboard',
     paymentStatus: 'Payment status',
@@ -154,12 +158,14 @@ const formatAmount = (amount: number, currency: string, language: PublicLanguage
 };
 
 type EmbeddedPaymentFormProps = {
-  tier: Tier;
-  quote: PaymentQuote;
+  paymentSession: {
+    purchaseId: number;
+    clientSecret: string;
+  };
   language: PublicLanguage;
 };
 
-const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps) => {
+const EmbeddedPaymentForm = ({ paymentSession, language }: EmbeddedPaymentFormProps) => {
   const navigate = useNavigate();
   const stripe = useStripe();
   const elements = useElements();
@@ -185,17 +191,10 @@ const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps
         throw new Error(submitResult.error.message || 'Payment details are incomplete');
       }
 
-      const paymentIntent = await createPaymentIntent(tier);
-
-      if (!paymentIntent.clientSecret) {
-        throw new Error('Payment initialization did not return a client secret');
-      }
-
       const result = await stripe.confirmPayment({
         elements,
-        clientSecret: paymentIntent.clientSecret,
         confirmParams: {
-          return_url: `${window.location.origin}/payment/success?purchase_id=${encodeURIComponent(String(paymentIntent.purchaseId))}`,
+          return_url: `${window.location.origin}/payment/success?purchase_id=${encodeURIComponent(String(paymentSession.purchaseId))}`,
         },
         redirect: 'if_required',
       });
@@ -205,7 +204,7 @@ const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps
       }
 
       if (result.paymentIntent) {
-        navigate(`/payment/success?purchase_id=${encodeURIComponent(String(paymentIntent.purchaseId))}`, {
+        navigate(`/payment/success?purchase_id=${encodeURIComponent(String(paymentSession.purchaseId))}`, {
           replace: true,
         });
       }
@@ -221,9 +220,6 @@ const EmbeddedPaymentForm = ({ tier, quote, language }: EmbeddedPaymentFormProps
         <div>
           <p className="text-sm font-semibold text-white">{pageCopy.paymentFormTitle}</p>
           <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.paymentFormBody}</p>
-        </div>
-        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-200">
-          {formatAmount(quote.amount, quote.currency, language)}
         </div>
       </div>
 
@@ -269,8 +265,15 @@ const PaymentPlaceholder = () => {
   const [draftSummary, setDraftSummary] = useState<DraftSummary>({});
   const [paymentOverview, setPaymentOverview] = useState<PaymentOverview | null>(null);
   const [paymentQuote, setPaymentQuote] = useState<PaymentQuote | null>(null);
+  const [paymentSession, setPaymentSession] = useState<{
+    purchaseId: number;
+    clientSecret: string;
+    amount: number;
+    currency: string;
+  } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [quoteLoading, setQuoteLoading] = useState(true);
+  const [paymentSessionLoading, setPaymentSessionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const requestedTier = parseTier(searchParams.get('tier')) ?? 'BASIC';
@@ -329,6 +332,10 @@ const PaymentPlaceholder = () => {
   const draftPath = draftSummary.package ? '/create-event' : `/create-event?tier=${encodeURIComponent(requestedTier)}`;
 
   useEffect(() => {
+    setPaymentSession(null);
+  }, [displayTier]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadQuote = async () => {
@@ -366,26 +373,51 @@ const PaymentPlaceholder = () => {
   }, [displayTier, isPaid, overviewLoading]);
 
   const displayedPrice = useMemo(() => {
+    if (paymentSession) {
+      return formatAmount(paymentSession.amount, paymentSession.currency, language);
+    }
+
     if (!paymentQuote) {
       return tierCopy.price;
     }
 
     return formatAmount(paymentQuote.amount, paymentQuote.currency, language);
-  }, [language, paymentQuote, tierCopy.price]);
+  }, [language, paymentQuote, paymentSession, tierCopy.price]);
 
-  const elementsOptions = useMemo<StripeElementsOptionsMode | null>(() => {
-    if (!paymentQuote) {
+  const elementsOptions = useMemo(() => {
+    if (!paymentSession) {
       return null;
     }
 
     return {
-      mode: 'payment',
-      amount: paymentQuote.amount,
-      currency: paymentQuote.currency,
-      paymentMethodTypes: ['card'],
+      clientSecret: paymentSession.clientSecret,
       appearance: paymentElementAppearance,
     };
-  }, [paymentQuote]);
+  }, [paymentSession]);
+
+  const initializePaymentSession = async () => {
+    setPaymentSessionLoading(true);
+    setError(null);
+
+    try {
+      const nextSession = await createPaymentIntent(displayTier);
+
+      if (!nextSession.clientSecret) {
+        throw new Error('Payment initialization did not return a client secret');
+      }
+
+      setPaymentSession({
+        purchaseId: nextSession.purchaseId,
+        clientSecret: nextSession.clientSecret,
+        amount: nextSession.amount,
+        currency: nextSession.currency,
+      });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to initialize payment');
+    } finally {
+      setPaymentSessionLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">
@@ -468,14 +500,44 @@ const PaymentPlaceholder = () => {
                   <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
                     {pageCopy.missingStripeKey}
                   </div>
-                ) : quoteLoading || !elementsOptions || !paymentQuote ? (
+                ) : quoteLoading || !paymentQuote ? (
                   <div className="mt-8 flex items-center gap-3 rounded-2xl border border-gray-800 bg-gray-950/70 px-5 py-4 text-sm text-gray-300">
                     <Loader2 size={18} className="animate-spin" />
                     {pageCopy.loadingForm}
                   </div>
+                ) : !paymentSession || !elementsOptions ? (
+                  <div className="mt-8 rounded-3xl border border-gray-800 bg-gray-950/70 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{pageCopy.paymentFormTitle}</p>
+                        <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.paymentFormBody}</p>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-200">
+                        {displayedPrice}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-dashed border-gray-700 bg-gray-900/70 px-4 py-3 text-sm text-gray-300">
+                      <p className="font-semibold text-white">{pageCopy.irisTitle}</p>
+                      <p className="mt-1 leading-6 text-gray-400">{pageCopy.irisBody}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={initializePaymentSession}
+                      disabled={paymentSessionLoading}
+                      className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {paymentSessionLoading ? <Loader2 size={18} className="animate-spin" /> : pageCopy.loadCardForm}
+                    </button>
+
+                    {paymentSessionLoading && (
+                      <p className="mt-3 text-center text-sm text-gray-400">{pageCopy.loadingCardForm}</p>
+                    )}
+                  </div>
                 ) : (
                   <Elements stripe={stripePromise} options={elementsOptions}>
-                    <EmbeddedPaymentForm tier={displayTier} quote={paymentQuote} language={language} />
+                    <EmbeddedPaymentForm paymentSession={paymentSession} language={language} />
                   </Elements>
                 )}
               </>
