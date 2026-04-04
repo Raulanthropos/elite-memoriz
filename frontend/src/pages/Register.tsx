@@ -68,6 +68,8 @@ const Register = () => {
   const requestedRedirect = searchParams.get('redirect');
   const redirectPath = sanitizeRedirectPath(requestedRedirect);
   const emailRedirectTo = getEmailRedirectUrl(requestedRedirect);
+  const existingAccountRedirectPath = redirectPath.startsWith('/payment') ? '/dashboard' : redirectPath;
+  const existingAccountLoginHref = `/login?redirect=${encodeURIComponent(existingAccountRedirectPath)}`;
 
   const pageCopy = copy[language];
   const passwordRequirements = getPasswordRequirements(password);
@@ -76,6 +78,16 @@ const Register = () => {
   useEffect(() => {
     setStoredPublicLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV && existingAccountRedirectPath !== redirectPath) {
+      console.debug('[Register] Redirecting existing-account sign-in to dashboard instead of payment.', {
+        requestedRedirect,
+        redirectPath,
+        existingAccountRedirectPath,
+      });
+    }
+  }, [existingAccountRedirectPath, redirectPath, requestedRedirect]);
 
   useEffect(() => {
     let isActive = true;
@@ -249,7 +261,7 @@ const Register = () => {
 
           <p className="text-center text-sm text-gray-400">
             {pageCopy.signInPrompt}{' '}
-            <Link to={`/login?redirect=${encodeURIComponent(redirectPath)}`} className="font-medium text-indigo-400 transition-colors hover:text-indigo-300">
+            <Link to={existingAccountLoginHref} className="font-medium text-indigo-400 transition-colors hover:text-indigo-300">
               {pageCopy.signIn}
             </Link>
           </p>
