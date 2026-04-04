@@ -14,6 +14,7 @@ import {
 } from '../lib/createEventDraft';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 type EventCategory = 'wedding' | 'baptism' | 'party' | 'other';
 
@@ -168,6 +169,8 @@ const CreateEvent = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isCropping, setIsCropping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useDocumentTitle(language === 'el' ? 'Elite Memoriz | Δημιουργία Event' : 'Elite Memoriz | Create Event');
 
   const pageCopy = copy[language];
 

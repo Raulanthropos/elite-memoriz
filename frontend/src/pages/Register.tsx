@@ -8,6 +8,7 @@ import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage }
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
 import { isExistingAccountError, normalizeAuthEmail } from '../lib/authEmail';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const copy = {
   el: {
@@ -74,6 +75,8 @@ const Register = () => {
   const pageCopy = copy[language];
   const passwordRequirements = getPasswordRequirements(password);
   const passwordRequirementKeys = Object.keys(pageCopy.requirements) as PasswordRequirementKey[];
+
+  useDocumentTitle(language === 'el' ? 'Elite Memoriz | Εγγραφή Host' : 'Elite Memoriz | Register');
 
   useEffect(() => {
     setStoredPublicLanguage(language);

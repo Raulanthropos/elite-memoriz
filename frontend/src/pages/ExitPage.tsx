@@ -1,7 +1,7 @@
-// import { useNavigate } from 'react-router-dom';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const ExitPage = () => {
-  // const navigate = useNavigate();
+  useDocumentTitle('Elite Memoriz | Exit');
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">

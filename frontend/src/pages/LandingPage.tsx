@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Camera, CheckCircle2, CreditCard, Globe, Image, Lock, QrCode, Sparkles, UserRoundPlus, Users } from 'lucide-react';
 import { TIERS, type Tier } from '../lib/tiers';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 type Language = 'el' | 'en';
 
@@ -167,6 +168,8 @@ const LandingPage = () => {
     return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'el';
   });
   const [selectedTier, setSelectedTier] = useState<Tier>('PREMIUM');
+
+  useDocumentTitle(language === 'el' ? 'Elite Memoriz | Αρχική' : 'Elite Memoriz | Home');
 
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);

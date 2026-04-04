@@ -8,6 +8,7 @@ import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
 import { isExistingAccountError, normalizeAuthEmail } from '../lib/authEmail';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const copy = {
   el: {
@@ -83,6 +84,12 @@ const Login = () => {
   const pageCopy = copy[language];
   const passwordRequirements = getPasswordRequirements(password);
   const passwordRequirementKeys = Object.keys(pageCopy.requirements) as PasswordRequirementKey[];
+
+  useDocumentTitle(
+    language === 'el'
+      ? `Elite Memoriz | ${isRegistering ? 'Εγγραφή Host' : 'Σύνδεση Host'}`
+      : `Elite Memoriz | ${isRegistering ? 'Register' : 'Login'}`
+  );
 
   useEffect(() => {
     setStoredPublicLanguage(language);
