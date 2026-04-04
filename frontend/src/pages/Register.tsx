@@ -181,6 +181,7 @@ const Register = () => {
                 <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.email}</label>
                 <input
                   type="email"
+                  autoComplete="email"
                   required
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -194,6 +195,7 @@ const Register = () => {
                   <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.password}</label>
                   <input
                     type="password"
+                    autoComplete="new-password"
                     required
                     minLength={8}
                     value={password}
@@ -221,6 +223,7 @@ const Register = () => {
                   <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.confirm}</label>
                   <input
                     type="password"
+                    autoComplete="new-password"
                     required
                     minLength={8}
                     value={confirmPassword}

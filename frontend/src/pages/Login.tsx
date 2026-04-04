@@ -219,6 +219,7 @@ const Login = () => {
                 <input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   required
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -232,6 +233,7 @@ const Login = () => {
                 <input
                   id="password"
                   type="password"
+                  autoComplete={isRegistering ? 'new-password' : 'current-password'}
                   required
                   minLength={isRegistering ? 8 : undefined}
                   value={password}
@@ -264,6 +266,7 @@ const Login = () => {
                   <input
                     id="confirmPassword"
                     type="password"
+                    autoComplete="new-password"
                     required
                     minLength={8}
                     value={confirmPassword}
