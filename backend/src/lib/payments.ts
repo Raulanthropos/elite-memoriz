@@ -1,87 +1,95 @@
-import Stripe from 'stripe';
-import { and, desc, eq } from 'drizzle-orm';
-import { db } from '../db';
-import * as schema from '../db/schema';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createHmac } from 'crypto';
 import { parseNullableTier, parseTier, type Tier } from './tiers';
 
-export type PaymentStatus = (typeof schema.paymentStatuses)[number];
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
 export type PaymentOverviewStatus = PaymentStatus | 'NOT_STARTED';
-export type PaymentPurchaseRecord = typeof schema.paymentPurchases.$inferSelect;
+export type PaymentMethodType = 'card' | 'iris';
+
 export type TierPriceQuote = {
   amount: number;
   currency: string;
-  priceId: string;
 };
 
-const STRIPE_PRICE_ID_ENV: Record<Tier, string> = {
-  BASIC: 'STRIPE_PRICE_ID_BASIC',
-  PREMIUM: 'STRIPE_PRICE_ID_PREMIUM',
-  LUXURY: 'STRIPE_PRICE_ID_LUXURY',
+export type PurchaseRecord = {
+  id: number;
+  user_id: string;
+  selected_tier: string;
+  unlocked_tier: string | null;
+  payment_method_type: string;
+  everypay_payment_token: string | null;
+  everypay_customer_email: string | null;
+  payment_status: string;
+  paid_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-let stripeClient: Stripe | null = null;
-const tierPriceCache = new Map<Tier, TierPriceQuote>();
+// ---------------------------------------------------------------------------
+// Environment helpers
+// ---------------------------------------------------------------------------
 
-const getRequiredEnv = (name: string) => {
+const getRequiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();
-
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-
   return value;
 };
 
-export const getStripeClient = () => {
-  if (!stripeClient) {
-    stripeClient = new Stripe(getRequiredEnv('STRIPE_SECRET_KEY'));
-  }
+// ---------------------------------------------------------------------------
+// Supabase client (service-role, shared across payment operations)
+// ---------------------------------------------------------------------------
 
-  return stripeClient;
+let supabaseClient: SupabaseClient | null = null;
+
+export const getSupabaseClient = (): SupabaseClient => {
+  if (!supabaseClient) {
+    supabaseClient = createClient(
+      getRequiredEnv('SUPABASE_URL'),
+      getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY'),
+    );
+  }
+  return supabaseClient;
 };
 
-export const getStripeWebhookSecret = () => getRequiredEnv('STRIPE_WEBHOOK_SECRET');
+// ---------------------------------------------------------------------------
+// EveryPay configuration
+// ---------------------------------------------------------------------------
 
-export const getStripePriceId = (tier: Tier) => getRequiredEnv(STRIPE_PRICE_ID_ENV[tier]);
+export const getEveryPaySecretKey = () => getRequiredEnv('EVERYPAY_SECRET_KEY');
+export const getEveryPayPublicKey = () => getRequiredEnv('EVERYPAY_PUBLIC_KEY');
 
-export const getStripeTierPrice = async (tier: Tier): Promise<TierPriceQuote> => {
-  const cached = tierPriceCache.get(tier);
-  if (cached) {
-    return cached;
-  }
+export const getEveryPayApiUrl = () =>
+  process.env.EVERYPAY_API_URL?.trim() || 'https://sandbox-api.everypay.gr';
 
-  const price = await getStripeClient().prices.retrieve(getStripePriceId(tier));
+export const getEveryPayCallbackUrl = () => getRequiredEnv('EVERYPAY_CALLBACK_URL');
 
-  if (price.type !== 'one_time' || price.unit_amount == null || !price.currency) {
-    throw new Error(`Stripe price ${price.id} must be a one-time price with unit_amount and currency`);
-  }
+// ---------------------------------------------------------------------------
+// Tier pricing (amount in cents, EUR)
+// ---------------------------------------------------------------------------
 
-  const nextQuote: TierPriceQuote = {
-    amount: price.unit_amount,
-    currency: price.currency,
-    priceId: price.id,
+export const getTierPrice = (tier: Tier): TierPriceQuote => {
+  const prices: Record<Tier, number> = {
+    BASIC: 0,
+    PREMIUM: Number(process.env.TIER_PRICE_PREMIUM) || 4900,
+    LUXURY: Number(process.env.TIER_PRICE_LUXURY) || 9900,
   };
-
-  tierPriceCache.set(tier, nextQuote);
-  return nextQuote;
+  return { amount: prices[tier], currency: 'EUR' };
 };
+
+// ---------------------------------------------------------------------------
+// Frontend URL resolution (kept from original)
+// ---------------------------------------------------------------------------
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 
 const isPrivateIpv4Hostname = (hostname: string) => {
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
-    return true;
-  }
-
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
-    return true;
-  }
-
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
   const match = hostname.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
-  if (!match) {
-    return false;
-  }
-
+  if (!match) return false;
   const secondOctet = Number(match[1]);
   return secondOctet >= 16 && secondOctet <= 31;
 };
@@ -89,13 +97,8 @@ const isPrivateIpv4Hostname = (hostname: string) => {
 const isDevelopmentFrontendOrigin = (origin: string) => {
   try {
     const url = new URL(origin);
-
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return false;
-    }
-
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
     const hostname = url.hostname.toLowerCase();
-
     return (
       hostname === 'localhost'
       || hostname === '127.0.0.1'
@@ -111,97 +114,264 @@ export const getFrontendAppUrl = (requestOrigin?: string | null) => {
   if (process.env.NODE_ENV !== 'production' && requestOrigin && isDevelopmentFrontendOrigin(requestOrigin)) {
     return normalizeUrl(requestOrigin);
   }
-
   return normalizeUrl(getRequiredEnv('FRONTEND_URL'));
 };
 
 export const getCreationPathForTier = (tier: Tier) =>
   `/create-event?tier=${encodeURIComponent(tier)}&source=payment`;
 
-export const getLatestPurchaseForUser = async (userId: string) => {
-  const [purchase] = await db
-    .select()
-    .from(schema.paymentPurchases)
-    .where(eq(schema.paymentPurchases.userId, userId))
-    .orderBy(desc(schema.paymentPurchases.createdAt), desc(schema.paymentPurchases.id))
-    .limit(1);
+// ---------------------------------------------------------------------------
+// EveryPay API helpers
+// ---------------------------------------------------------------------------
 
-  return purchase ?? null;
-};
+const everyPayRequest = async (
+  method: 'GET' | 'POST',
+  path: string,
+  body?: Record<string, string>,
+) => {
+  const url = `${getEveryPayApiUrl()}${path}`;
+  const auth = Buffer.from(`${getEveryPaySecretKey()}:`).toString('base64');
 
-export const getLatestPaidPurchaseForUser = async (userId: string) => {
-  const [purchase] = await db
-    .select()
-    .from(schema.paymentPurchases)
-    .where(
-      and(
-        eq(schema.paymentPurchases.userId, userId),
-        eq(schema.paymentPurchases.paymentStatus, 'PAID')
-      )
-    )
-    .orderBy(desc(schema.paymentPurchases.paidAt), desc(schema.paymentPurchases.id))
-    .limit(1);
+  const options: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Basic ${auth}`,
+      ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    },
+    ...(body ? { body: new URLSearchParams(body).toString() } : {}),
+  };
 
-  return purchase ?? null;
-};
+  const response = await fetch(url, options);
+  const data = await response.json();
 
-export const getPurchaseBySessionId = async (sessionId: string) => {
-  const [purchase] = await db
-    .select()
-    .from(schema.paymentPurchases)
-    .where(eq(schema.paymentPurchases.stripeCheckoutSessionId, sessionId))
-    .limit(1);
-
-  return purchase ?? null;
-};
-
-export const getPurchaseByPaymentIntentId = async (paymentIntentId: string) => {
-  const [purchase] = await db
-    .select()
-    .from(schema.paymentPurchases)
-    .where(eq(schema.paymentPurchases.stripePaymentIntentId, paymentIntentId))
-    .limit(1);
-
-  return purchase ?? null;
-};
-
-export const getPurchaseById = async (purchaseId: number) => {
-  const [purchase] = await db
-    .select()
-    .from(schema.paymentPurchases)
-    .where(eq(schema.paymentPurchases.id, purchaseId))
-    .limit(1);
-
-  return purchase ?? null;
-};
-
-const getTierFromPurchaseRecord = (purchase: PaymentPurchaseRecord | null) => {
-  if (!purchase) {
-    return null;
+  if (!response.ok) {
+    const msg = data?.error?.message ?? `EveryPay API error (${response.status})`;
+    const err = new Error(msg) as Error & { statusCode: number; everypayError: unknown };
+    err.statusCode = response.status;
+    err.everypayError = data?.error;
+    throw err;
   }
 
-  return parseNullableTier(purchase.unlockedTier) ?? parseNullableTier(purchase.selectedTier);
+  return data;
+};
+
+/**
+ * Charge a card token (ctn_*) or IRIS source token (src_*) via EveryPay.
+ * Returns the full payment object on success (status === "Captured").
+ */
+export const chargeToken = async (
+  token: string,
+  amount: number,
+  description: string,
+  payeeEmail?: string,
+  metadata?: Record<string, string>,
+) => {
+  const body: Record<string, string> = {
+    token,
+    amount: String(amount),
+    description,
+  };
+
+  if (payeeEmail) body.payee_email = payeeEmail;
+
+  if (metadata) {
+    for (const [k, v] of Object.entries(metadata)) {
+      body[`metadata[${k}]`] = v;
+    }
+  }
+
+  return everyPayRequest('POST', '/payments', body);
+};
+
+/** Create an IRIS session and return the response (contains `signature`). */
+export const createIrisSession = async (
+  amount: number,
+  currency: string,
+  callbackUrl: string,
+  md: string,
+) => {
+  return everyPayRequest('POST', '/iris/sessions', {
+    amount: String(amount),
+    currency: currency.toUpperCase(),
+    country: 'GR',
+    callback_url: callbackUrl,
+    md,
+  });
+};
+
+/** Retrieve an existing EveryPay payment by its token (pmt_*). */
+export const retrievePayment = async (paymentToken: string) => {
+  return everyPayRequest('GET', `/payments/${paymentToken}`);
+};
+
+// ---------------------------------------------------------------------------
+// IRIS hash verification (HMAC-SHA256)
+// ---------------------------------------------------------------------------
+
+export const verifyIrisHash = (
+  receivedHash: string,
+): { valid: boolean; payload: Record<string, unknown> | null } => {
+  try {
+    const decoded = Buffer.from(receivedHash, 'base64').toString('utf8');
+    const separatorIdx = decoded.indexOf('|');
+    if (separatorIdx === -1) return { valid: false, payload: null };
+
+    const hmacPart = decoded.substring(0, separatorIdx);
+    const jsonPart = decoded.substring(separatorIdx + 1);
+
+    const computed = createHmac('sha256', getEveryPaySecretKey())
+      .update(jsonPart)
+      .digest('hex');
+
+    if (hmacPart !== computed) return { valid: false, payload: null };
+
+    return { valid: true, payload: JSON.parse(jsonPart) };
+  } catch {
+    return { valid: false, payload: null };
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Database helpers (Supabase JS – bypasses Drizzle at runtime)
+// ---------------------------------------------------------------------------
+
+export const ensureHostProfile = async (userId: string, email: string) => {
+  const { error } = await getSupabaseClient()
+    .from('profiles')
+    .upsert(
+      { id: userId, email, role: 'host', tier: 'BASIC' },
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
+
+  if (error) throw error;
+};
+
+export const insertPendingPurchase = async (params: {
+  userId: string;
+  selectedTier: string;
+  paymentMethodType: string;
+  customerEmail: string;
+}) => {
+  const { data, error } = await getSupabaseClient()
+    .from('payment_purchases')
+    .insert({
+      user_id: params.userId,
+      selected_tier: params.selectedTier,
+      payment_method_type: params.paymentMethodType,
+      everypay_customer_email: params.customerEmail,
+      payment_status: 'PENDING',
+      updated_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data as { id: number };
+};
+
+export const markPurchasePaid = async (
+  purchaseId: number,
+  paymentToken: string,
+  tier: string,
+  userId: string,
+  userEmail: string,
+) => {
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  const { error: purchaseError } = await supabase
+    .from('payment_purchases')
+    .update({
+      payment_status: 'PAID',
+      unlocked_tier: tier,
+      everypay_payment_token: paymentToken,
+      paid_at: now,
+      updated_at: now,
+    })
+    .eq('id', purchaseId)
+    .eq('payment_status', 'PENDING');
+
+  if (purchaseError) throw purchaseError;
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert(
+      { id: userId, email: userEmail, role: 'host', tier },
+      { onConflict: 'id' },
+    );
+
+  if (profileError) throw profileError;
+};
+
+export const markPurchaseFailed = async (purchaseId: number) => {
+  const { error } = await getSupabaseClient()
+    .from('payment_purchases')
+    .update({
+      payment_status: 'FAILED',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', purchaseId)
+    .eq('payment_status', 'PENDING');
+
+  if (error) throw error;
+};
+
+export const getPurchaseById = async (
+  purchaseId: number,
+): Promise<PurchaseRecord | null> => {
+  const { data, error } = await getSupabaseClient()
+    .from('payment_purchases')
+    .select('*')
+    .eq('id', purchaseId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
 };
 
 export const getPaymentOverview = async (userId: string) => {
-  const [latestPaidPurchase, latestPurchase] = await Promise.all([
-    getLatestPaidPurchaseForUser(userId),
-    getLatestPurchaseForUser(userId),
+  const supabase = getSupabaseClient();
+
+  const [paidResult, latestResult] = await Promise.all([
+    supabase
+      .from('payment_purchases')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('payment_status', 'PAID')
+      .order('paid_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('payment_purchases')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
-  const entitledTier = getTierFromPurchaseRecord(latestPaidPurchase);
+  if (paidResult.error) throw paidResult.error;
+  if (latestResult.error) throw latestResult.error;
+
+  const latestPaidPurchase = paidResult.data as PurchaseRecord | null;
+  const latestPurchase = latestResult.data as PurchaseRecord | null;
+
+  const entitledTier = latestPaidPurchase
+    ? (parseNullableTier(latestPaidPurchase.unlocked_tier) ?? parseNullableTier(latestPaidPurchase.selected_tier))
+    : null;
+
   const activePurchase = latestPaidPurchase ?? latestPurchase;
-  const latestSelectedTier = parseTier(activePurchase?.selectedTier);
+  const latestSelectedTier = activePurchase ? parseTier(activePurchase.selected_tier) : null;
 
   return {
     hasPaidTier: Boolean(entitledTier),
     entitledTier,
     latestSelectedTier,
-    latestPaymentStatus: activePurchase?.paymentStatus ?? 'NOT_STARTED' as PaymentOverviewStatus,
+    latestPaymentStatus: (activePurchase?.payment_status ?? 'NOT_STARTED') as PaymentOverviewStatus,
     latestPurchaseId: activePurchase?.id ?? null,
-    latestCheckoutSessionId: activePurchase?.stripeCheckoutSessionId ?? null,
-    latestPaymentIntentId: activePurchase?.stripePaymentIntentId ?? null,
-    latestPaymentMethodType: activePurchase?.paymentMethodType ?? null,
+    latestPaymentMethodType: activePurchase?.payment_method_type ?? null,
     creationPath: entitledTier ? getCreationPathForTier(entitledTier) : null,
   };
 };
