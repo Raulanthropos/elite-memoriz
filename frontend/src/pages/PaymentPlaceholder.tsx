@@ -31,7 +31,7 @@ import { parseTier, type Tier } from '../lib/tiers';
 // EveryPay script loader
 // ---------------------------------------------------------------------------
 
-const EVERYPAY_SCRIPT_URL = 'https://sandbox-epc.everypay.gr/info/everypay.js';
+const EVERYPAY_SCRIPT_URL = 'https://sandbox-js.everypay.gr/v3';
 
 const EVERYPAY_IRIS_FORM_URL =
   'https://sandbox-payform-api.everypay.gr/api/payment-methods/iris';
