@@ -242,6 +242,7 @@ const CardPaymentForm = ({ session, language, onSuccess, onError }: CardFormProp
     };
 
     (window as any).everypay.payform(
+      'pay-form',
       payload,
       async (response: { response: string; token?: string; uuid?: string; msg?: { message?: string } }) => {
         if (response.response === 'success' && response.token) {
