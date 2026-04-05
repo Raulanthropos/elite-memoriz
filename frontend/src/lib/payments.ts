@@ -10,8 +10,6 @@ export type PaymentOverview = {
   latestSelectedTier: Tier | null;
   latestPaymentStatus: PaymentOverviewStatus;
   latestPurchaseId: number | null;
-  latestCheckoutSessionId: string | null;
-  latestPaymentIntentId: string | null;
   latestPaymentMethodType: string | null;
   creationPath: string | null;
 };
@@ -30,30 +28,29 @@ export type PurchaseStatus = {
   paymentMethodType: string;
   isUnlocked: boolean;
   creationPath: string | null;
-  stripeCheckoutStatus: string | null;
-  stripePaymentStatus: string | null;
-  stripePaymentIntentStatus: string | null;
 };
 
-export type CheckoutSessionStatus = {
-  sessionId: string;
-  selectedTier: Tier | null;
-  unlockedTier: Tier | null;
-  paymentStatus: Exclude<PaymentOverviewStatus, 'NOT_STARTED'>;
+export type PaymentSession = {
+  purchaseId: number;
+  publicKey: string;
+  amount: number;
+  currency: string;
+  paymentMethod: 'card' | 'iris';
+  signature?: string;
+};
+
+export type ChargeResult = {
+  success: boolean;
+  purchaseId: number;
+  paymentStatus: string;
   isUnlocked: boolean;
   creationPath: string | null;
-  stripeCheckoutStatus: string | null;
-  stripePaymentStatus: string | null;
+  message?: string;
 };
 
 type PaymentOverviewResponse = Omit<PaymentOverview, 'entitledTier' | 'latestSelectedTier'> & {
   entitledTier: string | null;
   latestSelectedTier: string | null;
-};
-
-type CheckoutSessionStatusResponse = Omit<CheckoutSessionStatus, 'selectedTier' | 'unlockedTier'> & {
-  selectedTier: string | null;
-  unlockedTier: string | null;
 };
 
 type PaymentQuoteResponse = Omit<PaymentQuote, 'tier'> & {
@@ -91,13 +88,15 @@ const parseJsonResponse = async <T>(response: Response): Promise<T> => {
   return payload as T;
 };
 
+// ---------------------------------------------------------------------------
+// API calls
+// ---------------------------------------------------------------------------
+
 export const fetchPaymentOverview = async (): Promise<PaymentOverview> => {
   const accessToken = await getAccessToken();
   const response = await fetch(`${API_URL}/api/payments/status`, {
     cache: 'no-store',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   const payload = await parseJsonResponse<PaymentOverviewResponse>(response);
@@ -113,9 +112,7 @@ export const fetchPaymentQuote = async (tier: Tier): Promise<PaymentQuote> => {
   const accessToken = await getAccessToken();
   const response = await fetch(`${API_URL}/api/payments/quote?tier=${encodeURIComponent(tier)}`, {
     cache: 'no-store',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   const payload = await parseJsonResponse<PaymentQuoteResponse>(response);
@@ -126,24 +123,38 @@ export const fetchPaymentQuote = async (tier: Tier): Promise<PaymentQuote> => {
   };
 };
 
-export const createPaymentIntent = async (tier: Tier) => {
+export const createPaymentSession = async (
+  tier: Tier,
+  paymentMethod: 'card' | 'iris' = 'card',
+): Promise<PaymentSession> => {
   const accessToken = await getAccessToken();
-  const response = await fetch(`${API_URL}/api/payments/payment-intents`, {
+  const response = await fetch(`${API_URL}/api/payments/create-session`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify({ tier, paymentMethod }),
   });
 
-  return parseJsonResponse<{
-    purchaseId: number;
-    paymentIntentId: string;
-    clientSecret: string | null;
-    amount: number;
-    currency: string;
-  }>(response);
+  return parseJsonResponse<PaymentSession>(response);
+};
+
+export const chargeCardToken = async (
+  purchaseId: number,
+  token: string,
+): Promise<ChargeResult> => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_URL}/api/payments/charge`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ purchaseId, token }),
+  });
+
+  return parseJsonResponse<ChargeResult>(response);
 };
 
 export const fetchPurchaseStatus = async (purchaseId: number): Promise<PurchaseStatus> => {
@@ -152,10 +163,8 @@ export const fetchPurchaseStatus = async (purchaseId: number): Promise<PurchaseS
     `${API_URL}/api/payments/purchase-status?purchase_id=${encodeURIComponent(String(purchaseId))}`,
     {
       cache: 'no-store',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
   );
 
   const payload = await parseJsonResponse<PurchaseStatusResponse>(response);
@@ -167,40 +176,40 @@ export const fetchPurchaseStatus = async (purchaseId: number): Promise<PurchaseS
   };
 };
 
-export const createCheckoutSession = async (tier: Tier) => {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${API_URL}/api/payments/checkout-sessions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ tier }),
-  });
+// ---------------------------------------------------------------------------
+// IRIS localStorage helpers
+// ---------------------------------------------------------------------------
 
-  return parseJsonResponse<{
-    sessionId: string;
-    checkoutUrl: string;
-  }>(response);
+const IRIS_PENDING_KEY = 'everypay_iris_pending';
+
+export type IrisPending = {
+  purchaseId: number;
+  tier: string;
+  timestamp: number;
 };
 
-export const fetchCheckoutSessionStatus = async (sessionId: string): Promise<CheckoutSessionStatus> => {
-  const accessToken = await getAccessToken();
-  const response = await fetch(
-    `${API_URL}/api/payments/checkout-session-status?session_id=${encodeURIComponent(sessionId)}`,
-    {
-      cache: 'no-store',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+export const storeIrisPending = (purchaseId: number, tier: string) => {
+  const value: IrisPending = { purchaseId, tier, timestamp: Date.now() };
+  localStorage.setItem(IRIS_PENDING_KEY, JSON.stringify(value));
+};
+
+export const getIrisPending = (): IrisPending | null => {
+  try {
+    const raw = localStorage.getItem(IRIS_PENDING_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as IrisPending;
+    const ONE_HOUR = 60 * 60 * 1000;
+    if (Date.now() - parsed.timestamp > ONE_HOUR) {
+      localStorage.removeItem(IRIS_PENDING_KEY);
+      return null;
     }
-  );
+    return parsed;
+  } catch {
+    localStorage.removeItem(IRIS_PENDING_KEY);
+    return null;
+  }
+};
 
-  const payload = await parseJsonResponse<CheckoutSessionStatusResponse>(response);
-
-  return {
-    ...payload,
-    selectedTier: parseNullableTier(payload.selectedTier),
-    unlockedTier: parseNullableTier(payload.unlockedTier),
-  };
+export const clearIrisPending = () => {
+  localStorage.removeItem(IRIS_PENDING_KEY);
 };

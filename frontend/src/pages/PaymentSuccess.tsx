@@ -3,9 +3,9 @@ import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import {
-  fetchCheckoutSessionStatus,
+  clearIrisPending,
   fetchPurchaseStatus,
-  type CheckoutSessionStatus,
+  getIrisPending,
 } from '../lib/payments';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 
@@ -15,21 +15,20 @@ const copy = {
     titlePaid: 'Η πληρωμή επιβεβαιώθηκε',
     titlePending: 'Η πληρωμή επεξεργάζεται ακόμη',
     titleFailed: 'Δεν υπάρχει επιβεβαιωμένη πληρωμή ακόμη',
-    checkingBody: 'Ελέγχουμε το backend και περιμένουμε το verified payment state πριν προχωρήσεις.',
+    checkingBody:
+      'Ελέγχουμε το backend και περιμένουμε το verified payment state πριν προχωρήσεις.',
     pendingBody:
       'Η εφαρμογή περιμένει ακόμη επιβεβαιωμένο backend αποτέλεσμα. Θα ξαναδοκιμάσουμε αυτόματα.',
-    paidBody: 'Το πακέτο σου έχει ξεκλειδωθεί. Σε λίγο θα μεταφερθείς στη δημιουργία event.',
+    paidBody:
+      'Το πακέτο σου έχει ξεκλειδωθεί. Σε λίγο θα μεταφερθείς στη δημιουργία event.',
     failedBody:
       'Αν η πληρωμή ακυρώθηκε ή απέτυχε, μπορείς να επιστρέψεις στο payment και να δοκιμάσεις ξανά με ασφάλεια.',
-    missingReference: 'Λείπει το purchase_id ή το session_id από το success URL.',
-    sessionStillOpen:
-      'Αυτό το legacy Checkout Session είναι ακόμη open στο Stripe και δεν υπάρχει ολοκληρωμένη πληρωμή.',
+    missingReference: 'Λείπει το αναγνωριστικό πληρωμής από το URL.',
     continueCta: 'Συνέχεια στο Create Event',
     retryCta: 'Επιστροφή στο Payment',
     dashboardCta: 'Dashboard',
     detailsLabel: 'Κατάσταση πληρωμής',
     methodLabel: 'Μέθοδος',
-    stripeLabel: 'Stripe',
     selectedTierLabel: 'Επιλεγμένο πακέτο',
     unlockedTierLabel: 'Ξεκλείδωτο πακέτο',
   },
@@ -38,18 +37,20 @@ const copy = {
     titlePaid: 'Payment confirmed',
     titlePending: 'Payment is still processing',
     titleFailed: 'No confirmed payment yet',
-    checkingBody: 'We are checking the backend and waiting for verified payment state before moving you forward.',
-    pendingBody: 'The app is still waiting for confirmed backend payment state. We will retry automatically.',
-    paidBody: 'Your tier has been unlocked. You will be sent to the event creation page in a moment.',
-    failedBody: 'If the payment was cancelled or failed, you can safely go back and try again.',
-    missingReference: 'The success URL is missing either purchase_id or session_id.',
-    sessionStillOpen: 'This legacy Checkout Session is still open in Stripe and no completed payment exists for it.',
+    checkingBody:
+      'We are checking the backend and waiting for verified payment state before moving you forward.',
+    pendingBody:
+      'The app is still waiting for confirmed backend payment state. We will retry automatically.',
+    paidBody:
+      'Your tier has been unlocked. You will be sent to the event creation page in a moment.',
+    failedBody:
+      'If the payment was cancelled or failed, you can safely go back and try again.',
+    missingReference: 'The payment identifier is missing from the URL.',
     continueCta: 'Continue to Create Event',
     retryCta: 'Back to Payment',
     dashboardCta: 'Dashboard',
     detailsLabel: 'Payment status',
     methodLabel: 'Method',
-    stripeLabel: 'Stripe',
     selectedTierLabel: 'Selected tier',
     unlockedTierLabel: 'Unlocked tier',
   },
@@ -64,9 +65,6 @@ type PaymentDetails = {
   paymentMethodType: string | null;
   creationPath: string | null;
   isUnlocked: boolean;
-  stripeCheckoutStatus: string | null;
-  stripePaymentStatus: string | null;
-  stripePaymentIntentStatus: string | null;
 };
 
 const PaymentSuccess = () => {
@@ -84,26 +82,28 @@ const PaymentSuccess = () => {
   }, [language]);
 
   useEffect(() => {
-    const purchaseIdValue = searchParams.get('purchase_id')?.trim() || '';
-    const purchaseId = Number(purchaseIdValue);
-    const sessionId = searchParams.get('session_id')?.trim() || '';
+    const purchaseIdParam = searchParams.get('purchase_id')?.trim() || '';
+    let purchaseId = Number(purchaseIdParam);
 
-    if ((!purchaseIdValue || !Number.isInteger(purchaseId) || purchaseId <= 0) && !sessionId) {
-      setVerificationState('failed');
-      setError(pageCopy.missingReference);
-      return;
+    // Fall back to localStorage for IRIS return flow
+    if (!purchaseIdParam || !Number.isInteger(purchaseId) || purchaseId <= 0) {
+      const irisPending = getIrisPending();
+      if (irisPending) {
+        purchaseId = irisPending.purchaseId;
+      } else {
+        setVerificationState('failed');
+        setError(pageCopy.missingReference);
+        return;
+      }
     }
 
     let cancelled = false;
     let retryTimeout: number | null = null;
     let redirectTimeout: number | null = null;
 
-    const scheduleRetry = (callback: () => void) => {
-      retryTimeout = window.setTimeout(callback, 2500);
-    };
-
     const handlePaidState = (creationPath: string | null) => {
       setVerificationState('paid');
+      clearIrisPending();
       if (creationPath) {
         redirectTimeout = window.setTimeout(() => {
           navigate(creationPath, { replace: true });
@@ -113,118 +113,51 @@ const PaymentSuccess = () => {
 
     const verifyPurchase = async () => {
       try {
-        const nextStatus = await fetchPurchaseStatus(purchaseId);
-        if (cancelled) {
-          return;
-        }
+        const status = await fetchPurchaseStatus(purchaseId);
+        if (cancelled) return;
 
-        const nextDetails: PaymentDetails = {
-          paymentStatus: nextStatus.paymentStatus,
-          selectedTier: nextStatus.selectedTier,
-          unlockedTier: nextStatus.unlockedTier,
-          paymentMethodType: nextStatus.paymentMethodType,
-          creationPath: nextStatus.creationPath,
-          isUnlocked: nextStatus.isUnlocked,
-          stripeCheckoutStatus: nextStatus.stripeCheckoutStatus,
-          stripePaymentStatus: nextStatus.stripePaymentStatus,
-          stripePaymentIntentStatus: nextStatus.stripePaymentIntentStatus,
+        const details: PaymentDetails = {
+          paymentStatus: status.paymentStatus,
+          selectedTier: status.selectedTier,
+          unlockedTier: status.unlockedTier,
+          paymentMethodType: status.paymentMethodType,
+          creationPath: status.creationPath,
+          isUnlocked: status.isUnlocked,
         };
 
-        setPaymentDetails(nextDetails);
+        setPaymentDetails(details);
         setError(null);
 
-        if (nextStatus.isUnlocked && nextStatus.creationPath) {
-          handlePaidState(nextStatus.creationPath);
+        if (status.isUnlocked && status.creationPath) {
+          handlePaidState(status.creationPath);
           return;
         }
 
-        if (nextStatus.paymentStatus === 'FAILED' || nextStatus.paymentStatus === 'EXPIRED') {
+        if (status.paymentStatus === 'FAILED' || status.paymentStatus === 'EXPIRED') {
           setVerificationState('failed');
+          clearIrisPending();
           return;
         }
 
         setVerificationState('pending');
-        scheduleRetry(() => {
+        retryTimeout = window.setTimeout(() => {
           void verifyPurchase();
-        });
-      } catch (nextError) {
-        if (cancelled) {
-          return;
-        }
-
+        }, 2500);
+      } catch (err) {
+        if (cancelled) return;
         setVerificationState('failed');
-        setError(nextError instanceof Error ? nextError.message : 'Payment verification failed');
+        setError(err instanceof Error ? err.message : 'Payment verification failed');
       }
     };
 
-    const verifyLegacyCheckoutSession = async () => {
-      try {
-        const nextStatus: CheckoutSessionStatus = await fetchCheckoutSessionStatus(sessionId);
-        if (cancelled) {
-          return;
-        }
-
-        setPaymentDetails({
-          paymentStatus: nextStatus.paymentStatus,
-          selectedTier: nextStatus.selectedTier,
-          unlockedTier: nextStatus.unlockedTier,
-          paymentMethodType: 'card',
-          creationPath: nextStatus.creationPath,
-          isUnlocked: nextStatus.isUnlocked,
-          stripeCheckoutStatus: nextStatus.stripeCheckoutStatus,
-          stripePaymentStatus: nextStatus.stripePaymentStatus,
-          stripePaymentIntentStatus: null,
-        });
-        setError(null);
-
-        if (nextStatus.isUnlocked && nextStatus.creationPath) {
-          handlePaidState(nextStatus.creationPath);
-          return;
-        }
-
-        if (nextStatus.stripeCheckoutStatus === 'open' && nextStatus.stripePaymentStatus === 'unpaid') {
-          setVerificationState('failed');
-          setError(pageCopy.sessionStillOpen);
-          return;
-        }
-
-        if (nextStatus.paymentStatus === 'FAILED' || nextStatus.paymentStatus === 'EXPIRED') {
-          setVerificationState('failed');
-          return;
-        }
-
-        setVerificationState('pending');
-        scheduleRetry(() => {
-          void verifyLegacyCheckoutSession();
-        });
-      } catch (nextError) {
-        if (cancelled) {
-          return;
-        }
-
-        setVerificationState('failed');
-        setError(nextError instanceof Error ? nextError.message : 'Payment verification failed');
-      }
-    };
-
-    if (purchaseIdValue && Number.isInteger(purchaseId) && purchaseId > 0) {
-      void verifyPurchase();
-    } else {
-      void verifyLegacyCheckoutSession();
-    }
+    void verifyPurchase();
 
     return () => {
       cancelled = true;
-
-      if (retryTimeout != null) {
-        window.clearTimeout(retryTimeout);
-      }
-
-      if (redirectTimeout != null) {
-        window.clearTimeout(redirectTimeout);
-      }
+      if (retryTimeout != null) window.clearTimeout(retryTimeout);
+      if (redirectTimeout != null) window.clearTimeout(redirectTimeout);
     };
-  }, [navigate, pageCopy.missingReference, pageCopy.sessionStillOpen, searchParams]);
+  }, [navigate, pageCopy.missingReference, searchParams]);
 
   const title =
     verificationState === 'paid'
@@ -244,7 +177,9 @@ const PaymentSuccess = () => {
           ? pageCopy.failedBody
           : pageCopy.checkingBody;
 
-  const retryTier = paymentDetails?.selectedTier ? `/payment?tier=${encodeURIComponent(paymentDetails.selectedTier)}` : '/payment';
+  const retryTier = paymentDetails?.selectedTier
+    ? `/payment?tier=${encodeURIComponent(paymentDetails.selectedTier)}`
+    : '/payment';
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">
@@ -287,32 +222,30 @@ const PaymentSuccess = () => {
               <div className="mt-4 grid gap-3 text-sm text-gray-300 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                   <span className="text-gray-500">Payment</span>
-                  <p className="mt-1 font-semibold text-white">{paymentDetails.paymentStatus}</p>
+                  <p className="mt-1 font-semibold text-white">
+                    {paymentDetails.paymentStatus}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                   <span className="text-gray-500">{pageCopy.methodLabel}</span>
-                  <p className="mt-1 font-semibold text-white">{paymentDetails.paymentMethodType || 'unknown'}</p>
+                  <p className="mt-1 font-semibold text-white">
+                    {paymentDetails.paymentMethodType || 'unknown'}
+                  </p>
                 </div>
-                {(paymentDetails.stripePaymentIntentStatus || paymentDetails.stripeCheckoutStatus || paymentDetails.stripePaymentStatus) && (
-                  <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
-                    <span className="text-gray-500">{pageCopy.stripeLabel}</span>
-                    <p className="mt-1 font-semibold text-white">
-                      {paymentDetails.stripePaymentIntentStatus
-                        || [paymentDetails.stripeCheckoutStatus, paymentDetails.stripePaymentStatus].filter(Boolean).join(' / ')
-                        || 'unknown'}
-                    </p>
-                  </div>
-                )}
                 {paymentDetails.selectedTier && (
                   <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                     <span className="text-gray-500">{pageCopy.selectedTierLabel}</span>
-                    <p className="mt-1 font-semibold text-white">{paymentDetails.selectedTier}</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {paymentDetails.selectedTier}
+                    </p>
                   </div>
                 )}
                 {paymentDetails.unlockedTier && (
                   <div className="rounded-xl border border-gray-800 bg-gray-900/70 px-4 py-3">
                     <span className="text-gray-500">{pageCopy.unlockedTierLabel}</span>
-                    <p className="mt-1 font-semibold text-white">{paymentDetails.unlockedTier}</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {paymentDetails.unlockedTier}
+                    </p>
                   </div>
                 )}
               </div>

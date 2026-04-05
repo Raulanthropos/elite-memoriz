@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "^5.14.1",
-    "@stripe/react-stripe-js": "^6.1.0",
-    "@stripe/stripe-js": "^9.0.1",
     "@supabase/supabase-js": "^2.89.0",
     "axios": "^1.6.5",
     "lucide-react": "^0.309.0",

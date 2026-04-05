@@ -1,19 +1,81 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Crown, Loader2, ShieldCheck, Star, Zap } from 'lucide-react';
-import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
-import { loadStripe, type Appearance } from '@stripe/stripe-js';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  Crown,
+  Landmark,
+  Loader2,
+  ShieldCheck,
+  Star,
+  Zap,
+} from 'lucide-react';
 import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { clearStoredCreateEventDraft, getStoredCreateEventDraft } from '../lib/createEventDraft';
 import {
-  createPaymentIntent,
+  chargeCardToken,
+  createPaymentSession,
   fetchPaymentOverview,
   fetchPaymentQuote,
+  getIrisPending,
+  storeIrisPending,
   type PaymentOverview,
   type PaymentQuote,
+  type PaymentSession,
 } from '../lib/payments';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 import { parseTier, type Tier } from '../lib/tiers';
+
+// ---------------------------------------------------------------------------
+// EveryPay script loader
+// ---------------------------------------------------------------------------
+
+const EVERYPAY_SCRIPT_URL = 'https://sandbox-epc.everypay.gr/info/everypay.js';
+
+const EVERYPAY_IRIS_FORM_URL =
+  'https://sandbox-payform-api.everypay.gr/api/payment-methods/iris';
+  
+
+const loadEveryPayScript = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if ((window as any).everypay) {
+      resolve();
+      return;
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${EVERYPAY_SCRIPT_URL}"]`,
+    );
+
+    if (existing) {
+      if ((window as any).everypay) {
+        resolve();
+      } else {
+        existing.addEventListener('load', () => resolve());
+        existing.addEventListener('error', () => reject(new Error('EveryPay script failed')));
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = EVERYPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load EveryPay payment library'));
+    document.body.appendChild(script);
+  });
+};
+
+const generateUUID = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+
+// ---------------------------------------------------------------------------
+// Types & constants
+// ---------------------------------------------------------------------------
 
 type DraftSummary = {
   title?: string;
@@ -21,21 +83,7 @@ type DraftSummary = {
   package?: string;
 };
 
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim() || '';
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
-
-const paymentElementAppearance: Appearance = {
-  theme: 'night',
-  variables: {
-    colorPrimary: '#4f46e5',
-    colorBackground: '#0b1120',
-    colorText: '#f8fafc',
-    colorTextSecondary: '#94a3b8',
-    colorDanger: '#f87171',
-    borderRadius: '18px',
-    fontFamily: 'system-ui, sans-serif',
-  },
-};
+type PaymentMethodTab = 'card' | 'iris';
 
 const tierIcons: Record<Tier, JSX.Element> = {
   BASIC: <Star size={24} className="text-slate-200" />,
@@ -49,38 +97,43 @@ const tierCardStyles: Record<Tier, string> = {
   LUXURY: 'border-rose-500/30 bg-rose-500/10',
 };
 
+// ---------------------------------------------------------------------------
+// Copy / translations
+// ---------------------------------------------------------------------------
+
 const copy = {
   el: {
-    eyebrow: 'Stripe Payment Element',
-    title: 'Επιβεβαίωση πακέτου και ασφαλής πληρωμή',
-    body:
-      'Η σελίδα πληρωμής πλέον μένει μέσα στην εφαρμογή. Προς το παρόν η ενσωμάτωση υποστηρίζει μόνο κάρτα μέσω Stripe Payment Element, ενώ το ξεκλείδωμα γίνεται μόνο μετά από επιβεβαιωμένο backend state.',
-    pendingTitle: 'Υπάρχει πληρωμή που περιμένει επιβεβαίωση',
-    pendingBody: 'Αν ολοκλήρωσες μόλις την πληρωμή, μπορείς να ξαναελέγξεις την κατάσταση χωρίς να ξεκινήσεις νέο attempt.',
+    eyebrow: 'Ασφαλής Πληρωμή',
+    title: 'Επιβεβαίωση πακέτου και πληρωμή',
+    body: 'Επίλεξε μέθοδο πληρωμής — κάρτα ή IRIS. Μετά την ολοκλήρωση το πακέτο ξεκλειδώνεται αυτόματα.',
+    pendingTitle: 'Υπάρχει πληρωμή IRIS σε εξέλιξη',
+    pendingBody: 'Αν ολοκλήρωσες τη μεταφορά στην τράπεζα, πάτα παρακάτω για έλεγχο κατάστασης.',
     unlockedTitle: 'Το πακέτο σου έχει ήδη ξεκλειδωθεί',
     unlockedBody: 'Δεν χρειάζεται νέα πληρωμή. Μπορείς να συνεχίσεις κατευθείαν στη δημιουργία event.',
     selectedPlan: 'Επιλεγμένο πακέτο',
     draftTitle: 'Τίτλος event',
     draftDate: 'Ημερομηνία event',
     secureNote:
-      'Η frontend επιβεβαίωση δεν αρκεί ποτέ μόνη της. Το backend παραμένει source of truth για unlock και entitlement.',
+      'Η πληρωμή επιβεβαιώνεται μόνο μέσω του backend. Καμία ενέργεια στο frontend δεν ξεκλειδώνει πρόσβαση από μόνη της.',
     changeTierNote: 'Αν θέλεις άλλο πακέτο, γύρνα πίσω στο draft και άλλαξέ το εκεί.',
     continueCreate: 'Συνέχεια στο Create Event',
     checkPending: 'Έλεγχος κατάστασης πληρωμής',
-    loadCardForm: 'Συνέχεια σε ασφαλή φόρμα κάρτας',
-    loadingCardForm: 'Γίνεται αρχικοποίηση της ασφαλούς φόρμας κάρτας...',
     backToDraft: 'Πίσω στο draft',
     dashboard: 'Dashboard',
     paymentStatus: 'Κατάσταση πληρωμής',
-    paymentFormTitle: 'Στοιχεία πληρωμής',
-    paymentFormBody:
-      'Η πληρωμή με κάρτα επιβεβαιώνεται μέσω Stripe PaymentIntent και webhook. Το IRIS θα προστεθεί αργότερα όταν είναι έτοιμο το πραγματικό processor layer.',
     loadingStatus: 'Γίνεται έλεγχος κατάστασης πληρωμής...',
-    loadingForm: 'Γίνεται φόρτωση ασφαλούς φόρμας πληρωμής...',
-    payButton: 'Πληρωμή τώρα',
-    missingStripeKey: 'Λείπει το VITE_STRIPE_PUBLISHABLE_KEY από το frontend env.',
-    irisTitle: 'IRIS',
-    irisBody: 'Θα ενεργοποιηθεί μόλις ολοκληρωθεί το πραγματικό IRIS processor / callback integration.',
+    loadingForm: 'Φόρτωση φόρμας πληρωμής...',
+    tabCard: 'Κάρτα',
+    tabIris: 'IRIS',
+    cardTitle: 'Πληρωμή με κάρτα',
+    cardBody: 'Συμπλήρωσε τα στοιχεία της κάρτας σου παρακάτω. Η πληρωμή γίνεται μέσω EveryPay.',
+    irisTitle: 'Πληρωμή με IRIS',
+    irisBody: 'Θα μεταφερθείς στην τράπεζά σου για να ολοκληρώσεις τη μεταφορά. Μόλις γίνει, γύρνα πίσω για επιβεβαίωση.',
+    payWithCard: 'Πληρωμή με κάρτα',
+    payWithIris: 'Πληρωμή μέσω IRIS',
+    processing: 'Επεξεργασία πληρωμής...',
+    initializingCard: 'Γίνεται αρχικοποίηση φόρμας κάρτας...',
+    redirectingIris: 'Μεταφορά στην τράπεζα...',
     tiers: {
       BASIC: {
         name: 'Basic',
@@ -100,36 +153,37 @@ const copy = {
     },
   },
   en: {
-    eyebrow: 'Stripe Payment Element',
-    title: 'Plan confirmation and secure payment',
-    body:
-      'The payment step now stays inside the app. For now the integration supports card payments only through the Stripe Payment Element, while the backend remains the only source of truth for unlocking.',
-    pendingTitle: 'A payment is still waiting for confirmation',
-    pendingBody: 'If you just completed a payment, you can re-check that attempt instead of starting a new one.',
+    eyebrow: 'Secure Payment',
+    title: 'Plan confirmation and payment',
+    body: 'Choose your payment method — card or IRIS bank transfer. Your tier unlocks automatically after confirmation.',
+    pendingTitle: 'An IRIS payment is pending',
+    pendingBody: 'If you completed the bank transfer, click below to check the status.',
     unlockedTitle: 'Your tier is already unlocked',
     unlockedBody: 'No new payment is needed. You can continue straight to event creation.',
     selectedPlan: 'Selected tier',
     draftTitle: 'Event title',
     draftDate: 'Event date',
     secureNote:
-      'Frontend success never unlocks access on its own. The backend remains the source of truth for entitlement changes.',
+      'Payment is confirmed exclusively through the backend. No frontend action unlocks access on its own.',
     changeTierNote: 'If you want a different tier, go back to the draft and change it there.',
     continueCreate: 'Continue to Create Event',
     checkPending: 'Check payment status',
-    loadCardForm: 'Continue to secure card form',
-    loadingCardForm: 'Initializing secure card form...',
     backToDraft: 'Back to draft',
     dashboard: 'Dashboard',
     paymentStatus: 'Payment status',
-    paymentFormTitle: 'Payment details',
-    paymentFormBody:
-      'Card payments are confirmed through a Stripe PaymentIntent and webhook. IRIS will be added later once the real processor layer is ready.',
-    loadingStatus: 'Loading payment status...',
-    loadingForm: 'Loading secure payment form...',
-    payButton: 'Pay now',
-    missingStripeKey: 'Missing VITE_STRIPE_PUBLISHABLE_KEY in frontend env.',
-    irisTitle: 'IRIS',
-    irisBody: 'This will be enabled once the real IRIS processor and callback integration is ready.',
+    loadingStatus: 'Checking payment status...',
+    loadingForm: 'Loading payment form...',
+    tabCard: 'Card',
+    tabIris: 'IRIS',
+    cardTitle: 'Pay with card',
+    cardBody: 'Fill in your card details below. Payment is processed securely via EveryPay.',
+    irisTitle: 'Pay with IRIS',
+    irisBody: 'You will be redirected to your bank to complete the transfer. Once done, return here to confirm.',
+    payWithCard: 'Pay with card',
+    payWithIris: 'Pay with IRIS',
+    processing: 'Processing payment...',
+    initializingCard: 'Initializing card form...',
+    redirectingIris: 'Redirecting to bank...',
     tiers: {
       BASIC: {
         name: 'Basic',
@@ -150,113 +204,91 @@ const copy = {
   },
 } as const;
 
-const formatAmount = (amount: number, currency: string, language: PublicLanguage) => {
-  return new Intl.NumberFormat(language === 'el' ? 'el-GR' : 'en-US', {
+const formatAmount = (amount: number, currency: string, language: PublicLanguage) =>
+  new Intl.NumberFormat(language === 'el' ? 'el-GR' : 'en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),
   }).format(amount / 100);
-};
 
-type EmbeddedPaymentFormProps = {
-  paymentSession: {
-    purchaseId: number;
-    clientSecret: string;
-  };
+// ---------------------------------------------------------------------------
+// Card payment form (embedded EveryPay payform)
+// ---------------------------------------------------------------------------
+
+type CardFormProps = {
+  session: PaymentSession;
   language: PublicLanguage;
+  onSuccess: (creationPath: string | null) => void;
+  onError: (message: string) => void;
 };
 
-const EmbeddedPaymentForm = ({ paymentSession, language }: EmbeddedPaymentFormProps) => {
-  const navigate = useNavigate();
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+const CardPaymentForm = ({ session, language, onSuccess, onError }: CardFormProps) => {
+  const payformContainerRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
+  const [processing, setProcessing] = useState(false);
   const pageCopy = copy[language];
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  useEffect(() => {
+    if (initializedRef.current) return;
+    if (!(window as any).everypay) return;
+    if (!payformContainerRef.current) return;
 
-    if (!stripe || !elements) {
-      return;
-    }
+    initializedRef.current = true;
 
-    setIsSubmitting(true);
-    setError(null);
+    const payload = {
+      pk: session.publicKey,
+      amount: session.amount,
+      locale: language === 'el' ? 'el' : 'en',
+      txnType: 'tds',
+    };
 
-    try {
-      const submitResult = await elements.submit();
-
-      if (submitResult.error) {
-        throw new Error(submitResult.error.message || 'Payment details are incomplete');
-      }
-
-      const result = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/payment/success?purchase_id=${encodeURIComponent(String(paymentSession.purchaseId))}`,
-        },
-        redirect: 'if_required',
-      });
-
-      if (result.error) {
-        throw new Error(result.error.message || 'Payment confirmation failed');
-      }
-
-      if (result.paymentIntent) {
-        navigate(`/payment/success?purchase_id=${encodeURIComponent(String(paymentSession.purchaseId))}`, {
-          replace: true,
-        });
-      }
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Failed to start payment');
-      setIsSubmitting(false);
-    }
-  };
+    (window as any).everypay.payform(
+      payload,
+      async (response: { response: string; token?: string; uuid?: string; msg?: { message?: string } }) => {
+        if (response.response === 'success' && response.token) {
+          setProcessing(true);
+          try {
+            const result = await chargeCardToken(session.purchaseId, response.token);
+            if (result.success && result.isUnlocked) {
+              onSuccess(result.creationPath);
+            } else {
+              onError(result.message || 'Payment was not captured');
+            }
+          } catch (err) {
+            onError(err instanceof Error ? err.message : 'Payment failed');
+          } finally {
+            setProcessing(false);
+          }
+        } else {
+          const msg =
+            (response as any).msg?.message ||
+            'Card authentication failed. Please try a different card.';
+          onError(msg);
+        }
+      },
+    );
+  }, [session, language, onSuccess, onError]);
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 rounded-3xl border border-gray-800 bg-gray-950/70 p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-white">{pageCopy.paymentFormTitle}</p>
-          <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.paymentFormBody}</p>
-        </div>
-      </div>
+    <div className="mt-5">
+      <div
+        id="pay-form"
+        ref={payformContainerRef}
+        className="min-h-[120px] rounded-2xl border border-gray-800 bg-slate-950/80 p-4"
+      />
 
-      <div className="mt-5 rounded-2xl border border-gray-800 bg-slate-950/80 p-4">
-        <PaymentElement
-          options={{
-            layout: {
-              type: 'accordion',
-              defaultCollapsed: false,
-              radios: 'always',
-              spacedAccordionItems: false,
-            },
-          }}
-        />
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-dashed border-gray-700 bg-gray-900/70 px-4 py-3 text-sm text-gray-300">
-        <p className="font-semibold text-white">{pageCopy.irisTitle}</p>
-        <p className="mt-1 leading-6 text-gray-400">{pageCopy.irisBody}</p>
-      </div>
-
-      {error && (
-        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
+      {processing && (
+        <div className="mt-4 flex items-center justify-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 px-5 py-4 text-sm text-indigo-200">
+          <Loader2 size={18} className="animate-spin" />
+          {pageCopy.processing}
         </div>
       )}
-
-      <button
-        type="submit"
-        disabled={!stripe || !elements || isSubmitting}
-        className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : pageCopy.payButton}
-      </button>
-    </form>
+    </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 const PaymentPlaceholder = () => {
   const navigate = useNavigate();
@@ -265,16 +297,13 @@ const PaymentPlaceholder = () => {
   const [draftSummary, setDraftSummary] = useState<DraftSummary>({});
   const [paymentOverview, setPaymentOverview] = useState<PaymentOverview | null>(null);
   const [paymentQuote, setPaymentQuote] = useState<PaymentQuote | null>(null);
-  const [paymentSession, setPaymentSession] = useState<{
-    purchaseId: number;
-    clientSecret: string;
-    amount: number;
-    currency: string;
-  } | null>(null);
+  const [paymentSession, setPaymentSession] = useState<PaymentSession | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [quoteLoading, setQuoteLoading] = useState(true);
-  const [paymentSessionLoading, setPaymentSessionLoading] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethodTab, setPaymentMethodTab] = useState<PaymentMethodTab>('card');
 
   const requestedTier = parseTier(searchParams.get('tier')) ?? 'BASIC';
   const pageCopy = copy[language];
@@ -283,12 +312,10 @@ const PaymentPlaceholder = () => {
     setStoredPublicLanguage(language);
   }, [language]);
 
+  // Load saved event draft for the sidebar summary
   useEffect(() => {
     const savedDraft = getStoredCreateEventDraft();
-    if (!savedDraft) {
-      return;
-    }
-
+    if (!savedDraft) return;
     try {
       const parsed = JSON.parse(savedDraft) as { formData?: DraftSummary };
       setDraftSummary(parsed.formData ?? {});
@@ -297,127 +324,161 @@ const PaymentPlaceholder = () => {
     }
   }, []);
 
+  // Load EveryPay JS
+  useEffect(() => {
+    loadEveryPayScript()
+      .then(() => setScriptLoaded(true))
+      .catch(() => setError('Failed to load payment library'));
+  }, []);
+
+  // Fetch payment overview
   useEffect(() => {
     let cancelled = false;
-
     const loadOverview = async () => {
       try {
-        const nextOverview = await fetchPaymentOverview();
-        if (!cancelled) {
-          setPaymentOverview(nextOverview);
-        }
-      } catch (nextError) {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : 'Failed to load payment status');
-        }
+        const next = await fetchPaymentOverview();
+        if (!cancelled) setPaymentOverview(next);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load payment status');
       } finally {
-        if (!cancelled) {
-          setOverviewLoading(false);
-        }
+        if (!cancelled) setOverviewLoading(false);
       }
     };
-
     void loadOverview();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const displayTier = paymentOverview?.entitledTier ?? requestedTier;
   const tierCopy = pageCopy.tiers[displayTier];
   const isPaid = Boolean(paymentOverview?.hasPaidTier && paymentOverview.entitledTier);
-  const latestPendingPurchaseId =
-    paymentOverview?.latestPaymentStatus === 'PENDING' ? paymentOverview.latestPurchaseId : null;
-  const draftPath = draftSummary.package ? '/create-event' : `/create-event?tier=${encodeURIComponent(requestedTier)}`;
 
+  // Check for pending IRIS payment from localStorage
+  const irisPending = getIrisPending();
+  const showIrisPendingBanner = !isPaid && irisPending != null;
+
+  const draftPath = draftSummary.package
+    ? '/create-event'
+    : `/create-event?tier=${encodeURIComponent(requestedTier)}`;
+
+  // Reset session when tier changes
   useEffect(() => {
     setPaymentSession(null);
   }, [displayTier]);
 
+  // Fetch tier price quote
   useEffect(() => {
     let cancelled = false;
-
     const loadQuote = async () => {
       if (isPaid) {
         setPaymentQuote(null);
         setQuoteLoading(false);
         return;
       }
-
       setQuoteLoading(true);
-
       try {
-        const nextQuote = await fetchPaymentQuote(displayTier);
-        if (!cancelled) {
-          setPaymentQuote(nextQuote);
-        }
-      } catch (nextError) {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : 'Failed to load payment form');
-        }
+        const next = await fetchPaymentQuote(displayTier);
+        if (!cancelled) setPaymentQuote(next);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load pricing');
       } finally {
-        if (!cancelled) {
-          setQuoteLoading(false);
-        }
+        if (!cancelled) setQuoteLoading(false);
       }
     };
-
-    if (!overviewLoading) {
-      void loadQuote();
-    }
-
-    return () => {
-      cancelled = true;
-    };
+    if (!overviewLoading) void loadQuote();
+    return () => { cancelled = true; };
   }, [displayTier, isPaid, overviewLoading]);
 
   const displayedPrice = useMemo(() => {
-    if (paymentSession) {
-      return formatAmount(paymentSession.amount, paymentSession.currency, language);
-    }
-
-    if (!paymentQuote) {
-      return tierCopy.price;
-    }
-
-    return formatAmount(paymentQuote.amount, paymentQuote.currency, language);
+    if (paymentSession) return formatAmount(paymentSession.amount, paymentSession.currency, language);
+    if (paymentQuote) return formatAmount(paymentQuote.amount, paymentQuote.currency, language);
+    return tierCopy.price;
   }, [language, paymentQuote, paymentSession, tierCopy.price]);
 
-  const elementsOptions = useMemo(() => {
-    if (!paymentSession) {
-      return null;
+  // ---- Card flow ----
+
+  const initializeCardSession = async () => {
+    setSessionLoading(true);
+    setError(null);
+    try {
+      const session = await createPaymentSession(displayTier, 'card');
+      setPaymentSession(session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to initialize payment');
+    } finally {
+      setSessionLoading(false);
     }
+  };
 
-    return {
-      clientSecret: paymentSession.clientSecret,
-      appearance: paymentElementAppearance,
-    };
-  }, [paymentSession]);
+  const handleCardSuccess = useCallback(
+    (creationPath: string | null) => {
+      if (creationPath) {
+        navigate(creationPath, { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    },
+    [navigate],
+  );
 
-  const initializePaymentSession = async () => {
-    setPaymentSessionLoading(true);
+  const handleCardError = useCallback((message: string) => {
+    setError(message);
+    setPaymentSession(null);
+  }, []);
+
+  // ---- IRIS flow ----
+
+  const [irisRedirecting, setIrisRedirecting] = useState(false);
+
+  const initiateIrisPayment = async () => {
+    setSessionLoading(true);
+    setIrisRedirecting(false);
     setError(null);
 
     try {
-      const nextSession = await createPaymentIntent(displayTier);
+      const session = await createPaymentSession(displayTier, 'iris');
 
-      if (!nextSession.clientSecret) {
-        throw new Error('Payment initialization did not return a client secret');
+      if (!session.signature) {
+        throw new Error('IRIS session did not return a signature');
       }
 
-      setPaymentSession({
-        purchaseId: nextSession.purchaseId,
-        clientSecret: nextSession.clientSecret,
-        amount: nextSession.amount,
-        currency: nextSession.currency,
-      });
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Failed to initialize payment');
+      storeIrisPending(session.purchaseId, displayTier);
+      setIrisRedirecting(true);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = EVERYPAY_IRIS_FORM_URL;
+      form.style.display = 'none';
+
+      const fields: Record<string, string> = {
+        flow: 'direct',
+        token: session.signature,
+        pk: session.publicKey,
+        amount: String(session.amount),
+        currency: session.currency.toUpperCase(),
+        uuid: generateUUID(),
+      };
+
+      for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start IRIS payment');
+      setIrisRedirecting(false);
     } finally {
-      setPaymentSessionLoading(false);
+      setSessionLoading(false);
     }
   };
+
+  // ---- Rendering ----
+
+  const showPaymentForm = !isPaid && !overviewLoading && scriptLoaded && !quoteLoading && paymentQuote;
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">
@@ -427,9 +488,14 @@ const PaymentPlaceholder = () => {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+          {/* Main content */}
           <div className="rounded-3xl border border-gray-800 bg-gray-900 p-8 shadow-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-300/80">{pageCopy.eyebrow}</p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">{pageCopy.title}</h1>
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-300/80">
+              {pageCopy.eyebrow}
+            </p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">
+              {pageCopy.title}
+            </h1>
             <p className="mt-5 max-w-3xl text-base leading-8 text-gray-300">{pageCopy.body}</p>
 
             {error && (
@@ -438,6 +504,7 @@ const PaymentPlaceholder = () => {
               </div>
             )}
 
+            {/* Status banners */}
             {overviewLoading ? (
               <div className="mt-8 flex items-center gap-3 rounded-2xl border border-gray-800 bg-gray-950/70 px-5 py-4 text-sm text-gray-300">
                 <Loader2 size={18} className="animate-spin" />
@@ -455,7 +522,7 @@ const PaymentPlaceholder = () => {
                   </div>
                 </div>
               </div>
-            ) : latestPendingPurchaseId ? (
+            ) : showIrisPendingBanner ? (
               <div className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
                 <div className="flex items-start gap-3">
                   <div className="rounded-xl bg-amber-500/15 p-3 text-amber-300">
@@ -469,6 +536,7 @@ const PaymentPlaceholder = () => {
               </div>
             ) : null}
 
+            {/* Tier card */}
             <article className={`mt-8 rounded-3xl border p-6 ${tierCardStyles[displayTier]}`}>
               <div className="flex items-center justify-between gap-4">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -494,60 +562,128 @@ const PaymentPlaceholder = () => {
 
             <p className="mt-5 text-sm leading-6 text-gray-400">{pageCopy.changeTierNote}</p>
 
-            {!isPaid && (
-              <>
-                {!stripePromise ? (
-                  <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
-                    {pageCopy.missingStripeKey}
-                  </div>
-                ) : quoteLoading || !paymentQuote ? (
-                  <div className="mt-8 flex items-center gap-3 rounded-2xl border border-gray-800 bg-gray-950/70 px-5 py-4 text-sm text-gray-300">
-                    <Loader2 size={18} className="animate-spin" />
-                    {pageCopy.loadingForm}
-                  </div>
-                ) : !paymentSession || !elementsOptions ? (
-                  <div className="mt-8 rounded-3xl border border-gray-800 bg-gray-950/70 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{pageCopy.paymentFormTitle}</p>
-                        <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.paymentFormBody}</p>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-200">
-                        {displayedPrice}
-                      </div>
-                    </div>
+            {/* Payment form area */}
+            {showPaymentForm && (
+              <div className="mt-8 rounded-3xl border border-gray-800 bg-gray-950/70 p-5">
+                {/* Tab selector */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethodTab('card');
+                      setPaymentSession(null);
+                      setError(null);
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
+                      paymentMethodTab === 'card'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <CreditCard size={16} />
+                    {pageCopy.tabCard}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethodTab('iris');
+                      setPaymentSession(null);
+                      setError(null);
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
+                      paymentMethodTab === 'iris'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <Landmark size={16} />
+                    {pageCopy.tabIris}
+                  </button>
+                </div>
 
-                    <div className="mt-4 rounded-2xl border border-dashed border-gray-700 bg-gray-900/70 px-4 py-3 text-sm text-gray-300">
-                      <p className="font-semibold text-white">{pageCopy.irisTitle}</p>
-                      <p className="mt-1 leading-6 text-gray-400">{pageCopy.irisBody}</p>
-                    </div>
+                {/* Card tab */}
+                {paymentMethodTab === 'card' && (
+                  <div className="mt-5">
+                    <p className="text-sm font-semibold text-white">{pageCopy.cardTitle}</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.cardBody}</p>
+
+                    {!paymentSession ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={initializeCardSession}
+                          disabled={sessionLoading}
+                          className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {sessionLoading ? (
+                            <Loader2 size={18} className="animate-spin" />
+                          ) : (
+                            pageCopy.payWithCard
+                          )}
+                        </button>
+                        {sessionLoading && (
+                          <p className="mt-3 text-center text-sm text-gray-400">
+                            {pageCopy.initializingCard}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <CardPaymentForm
+                        session={paymentSession}
+                        language={language}
+                        onSuccess={handleCardSuccess}
+                        onError={handleCardError}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* IRIS tab */}
+                {paymentMethodTab === 'iris' && (
+                  <div className="mt-5">
+                    <p className="text-sm font-semibold text-white">{pageCopy.irisTitle}</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.irisBody}</p>
 
                     <button
                       type="button"
-                      onClick={initializePaymentSession}
-                      disabled={paymentSessionLoading}
-                      className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={initiateIrisPayment}
+                      disabled={sessionLoading || irisRedirecting}
+                      className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {paymentSessionLoading ? <Loader2 size={18} className="animate-spin" /> : pageCopy.loadCardForm}
+                      {sessionLoading || irisRedirecting ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          {irisRedirecting ? pageCopy.redirectingIris : pageCopy.initializingCard}
+                        </>
+                      ) : (
+                        <>
+                          <Landmark size={16} />
+                          {pageCopy.payWithIris}
+                        </>
+                      )}
                     </button>
-
-                    {paymentSessionLoading && (
-                      <p className="mt-3 text-center text-sm text-gray-400">{pageCopy.loadingCardForm}</p>
-                    )}
                   </div>
-                ) : (
-                  <Elements stripe={stripePromise} options={elementsOptions}>
-                    <EmbeddedPaymentForm paymentSession={paymentSession} language={language} />
-                  </Elements>
                 )}
-              </>
+              </div>
             )}
 
+            {!showPaymentForm && !isPaid && !overviewLoading && (
+              <div className="mt-8 flex items-center gap-3 rounded-2xl border border-gray-800 bg-gray-950/70 px-5 py-4 text-sm text-gray-300">
+                <Loader2 size={18} className="animate-spin" />
+                {pageCopy.loadingForm}
+              </div>
+            )}
+
+            {/* Action buttons */}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {latestPendingPurchaseId && !isPaid && (
+              {showIrisPendingBanner && irisPending && (
                 <button
                   type="button"
-                  onClick={() => navigate(`/payment/success?purchase_id=${encodeURIComponent(String(latestPendingPurchaseId))}`)}
+                  onClick={() =>
+                    navigate(
+                      `/payment/success?purchase_id=${encodeURIComponent(String(irisPending.purchaseId))}`,
+                    )
+                  }
                   className="inline-flex items-center justify-center rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
                 >
                   {pageCopy.checkPending}
@@ -583,9 +719,12 @@ const PaymentPlaceholder = () => {
             </div>
           </div>
 
+          {/* Sidebar */}
           <aside className="rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
             <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5">
-              <p className="text-xs uppercase tracking-[0.25em] text-indigo-200/70">{pageCopy.selectedPlan}</p>
+              <p className="text-xs uppercase tracking-[0.25em] text-indigo-200/70">
+                {pageCopy.selectedPlan}
+              </p>
               <p className="mt-3 text-3xl font-semibold text-white">{tierCopy.name}</p>
               <p className="mt-3 text-sm leading-6 text-gray-300">{pageCopy.secureNote}</p>
             </div>
@@ -593,20 +732,26 @@ const PaymentPlaceholder = () => {
             <div className="mt-6 space-y-4">
               {draftSummary.title && (
                 <div className="rounded-2xl border border-gray-800 bg-gray-950/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-gray-500">{pageCopy.draftTitle}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
+                    {pageCopy.draftTitle}
+                  </p>
                   <p className="mt-2 text-lg font-medium text-white">{draftSummary.title}</p>
                 </div>
               )}
 
               {draftSummary.date && (
                 <div className="rounded-2xl border border-gray-800 bg-gray-950/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-gray-500">{pageCopy.draftDate}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
+                    {pageCopy.draftDate}
+                  </p>
                   <p className="mt-2 text-lg font-medium text-white">{draftSummary.date}</p>
                 </div>
               )}
 
               <div className="rounded-2xl border border-gray-800 bg-gray-950/70 p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-gray-500">{pageCopy.paymentStatus}</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
+                  {pageCopy.paymentStatus}
+                </p>
                 <p className="mt-2 text-lg font-medium text-white">
                   {paymentOverview?.latestPaymentStatus || 'NOT_STARTED'}
                 </p>
