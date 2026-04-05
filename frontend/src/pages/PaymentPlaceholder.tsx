@@ -242,9 +242,10 @@ const CardPaymentForm = ({ session, language, onSuccess, onError }: CardFormProp
     };
 
     (window as any).everypay.payform(
-      'pay-form',
       payload,
-      async (response: { response: string; token?: string; uuid?: string; msg?: { message?: string } }) => {
+      async (response: any) => {
+        if (response.onLoad) return;
+
         if (response.response === 'success' && response.token) {
           setProcessing(true);
           try {
@@ -259,9 +260,9 @@ const CardPaymentForm = ({ session, language, onSuccess, onError }: CardFormProp
           } finally {
             setProcessing(false);
           }
-        } else {
+        } else if (response.response === 'error') {
           const msg =
-            (response as any).msg?.message ||
+            response.msg?.message ||
             'Card authentication failed. Please try a different card.';
           onError(msg);
         }
