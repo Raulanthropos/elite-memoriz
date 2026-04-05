@@ -60,6 +60,7 @@ export const getSupabaseClient = (): SupabaseClient => {
 
 export const getEveryPaySecretKey = () => getRequiredEnv('EVERYPAY_SECRET_KEY');
 export const getEveryPayPublicKey = () => getRequiredEnv('EVERYPAY_PUBLIC_KEY');
+export const getEveryPaySharedKey = () => getRequiredEnv('EVERYPAY_SHARED_KEY');
 
 export const getEveryPayApiUrl = () =>
   process.env.EVERYPAY_API_URL?.trim() || 'https://sandbox-api.everypay.gr';
@@ -72,9 +73,9 @@ export const getEveryPayCallbackUrl = () => getRequiredEnv('EVERYPAY_CALLBACK_UR
 
 export const getTierPrice = (tier: Tier): TierPriceQuote => {
   const prices: Record<Tier, number> = {
-    BASIC: 0,
-    PREMIUM: Number(process.env.TIER_PRICE_PREMIUM) || 4900,
-    LUXURY: Number(process.env.TIER_PRICE_LUXURY) || 9900,
+    BASIC: Number(process.env.TIER_PRICE_BASIC) || 2900,
+    PREMIUM: Number(process.env.TIER_PRICE_PREMIUM) || 7900,
+    LUXURY: Number(process.env.TIER_PRICE_LUXURY) || 12900,
   };
   return { amount: prices[tier], currency: 'EUR' };
 };
@@ -128,7 +129,7 @@ const everyPayRequest = async (
   method: 'GET' | 'POST',
   path: string,
   body?: Record<string, string>,
-) => {
+): Promise<any> => {
   const url = `${getEveryPayApiUrl()}${path}`;
   const auth = Buffer.from(`${getEveryPaySecretKey()}:`).toString('base64');
 
@@ -142,11 +143,11 @@ const everyPayRequest = async (
   };
 
   const response = await fetch(url, options);
-  const data = await response.json();
+  const data: any = await response.json();
 
   if (!response.ok) {
     const msg = data?.error?.message ?? `EveryPay API error (${response.status})`;
-    const err = new Error(msg) as Error & { statusCode: number; everypayError: unknown };
+    const err = new Error(msg) as Error & { statusCode: number; everypayError: any };
     err.statusCode = response.status;
     err.everypayError = data?.error;
     throw err;
@@ -219,7 +220,7 @@ export const verifyIrisHash = (
     const hmacPart = decoded.substring(0, separatorIdx);
     const jsonPart = decoded.substring(separatorIdx + 1);
 
-    const computed = createHmac('sha256', getEveryPaySecretKey())
+    const computed = createHmac('sha256', getEveryPaySharedKey())
       .update(jsonPart)
       .digest('hex');
 
@@ -327,6 +328,31 @@ export const getPurchaseById = async (
 
   if (error) throw error;
   return data;
+};
+
+export const getLatestPaidPurchaseForUser = async (userId: string) => {
+  const { data, error } = await getSupabaseClient()
+    .from('payment_purchases')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('payment_status', 'PAID')
+    .order('paid_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id as number,
+    userId: data.user_id as string,
+    selectedTier: data.selected_tier as string,
+    unlockedTier: data.unlocked_tier as string | null,
+    paymentMethodType: data.payment_method_type as string,
+    paymentStatus: data.payment_status as string,
+    paidAt: data.paid_at as string | null,
+  };
 };
 
 export const getPaymentOverview = async (userId: string) => {

@@ -116,9 +116,6 @@ router.post('/create-session', async (req: AuthRequest, res: Response) => {
     }
 
     const quote = getTierPrice(tier);
-    if (quote.amount <= 0) {
-      return res.status(400).json({ message: 'BASIC tier does not require payment' });
-    }
 
     const overview = await getPaymentOverview(userId);
     if (overview.hasPaidTier && overview.entitledTier) {
