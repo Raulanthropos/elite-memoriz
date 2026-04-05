@@ -20,6 +20,7 @@ const Dashboard = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const getCategoryIcon = (category: string) => {
@@ -36,6 +37,8 @@ const Dashboard = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
+
+        setUserEmail(session.user.email ?? null);
 
         const res = await fetch(`${API_URL}/api/host/events`, {
           headers: {
@@ -65,6 +68,11 @@ const Dashboard = () => {
           <div>
             <h1 className="text-3xl font-bold text-white">Guest Reflections</h1>
             <p className="mt-2 text-gray-400">View and manage your event albums</p>
+            {userEmail && (
+              <p className="mt-1 text-sm text-gray-500">
+                Welcome back, <span className="text-gray-300">{userEmail}</span>
+              </p>
+            )}
           </div>
           <div className="flex gap-4">
             {/* <button 
