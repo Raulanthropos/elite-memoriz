@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { eventRoutes } from './routes/events';
 import { hostRoutes } from './routes/host';
-import { paymentRoutes, stripeWebhookHandler } from './routes/payments';
+import { paymentRoutes, everyPayWebhookHandler } from './routes/payments';
 import { deleteExpiredEvents, syncEventExpirations } from './services/eventCleanup';
 
 dotenv.config();
@@ -14,10 +14,15 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: true, // Allow dynamic origins (like LAN IPs) for local testing
+  origin: true,
   credentials: true,
 }));
-app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+app.post(
+  '/api/payments/webhook',
+  express.urlencoded({ extended: true }),
+  express.json(),
+  everyPayWebhookHandler,
+);
 app.use(express.json());
 app.use(cookieParser());
 

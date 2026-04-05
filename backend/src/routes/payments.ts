@@ -1,282 +1,55 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { and, eq } from 'drizzle-orm';
-import Stripe from 'stripe';
-import { db } from '../db';
-import * as schema from '../db/schema';
 import { authMiddleware, type AuthRequest } from '../middleware/auth';
 import {
+  chargeToken,
+  createIrisSession,
+  ensureHostProfile,
   getCreationPathForTier,
-  getFrontendAppUrl,
+  getEveryPayCallbackUrl,
+  getEveryPayPublicKey,
   getPaymentOverview,
   getPurchaseById,
-  getPurchaseBySessionId,
-  getStripeClient,
-  getStripePriceId,
-  getStripeTierPrice,
-  getStripeWebhookSecret,
+  getTierPrice,
+  insertPendingPurchase,
+  markPurchaseFailed,
+  markPurchasePaid,
+  verifyIrisHash,
+  type PurchaseRecord,
 } from '../lib/payments';
 import { parseNullableTier, parseTier, type Tier } from '../lib/tiers';
 
 const router = Router();
 
-const CARD_PAYMENT_METHOD_TYPE = 'card';
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-type PurchaseStatusUpdate = 'FAILED' | 'EXPIRED';
-
-type PaidPurchaseInput = {
-  userId: string;
-  userEmail: string;
-  tier: Tier;
-  paymentMethodType: string;
-  stripeCheckoutSessionId?: string | null;
-  stripePaymentIntentId?: string | null;
-  stripeCustomerEmail?: string | null;
-  expiresAt?: Date | null;
-};
-
-const getSessionPaymentIntentId = (session: Stripe.Checkout.Session) => {
-  if (typeof session.payment_intent === 'string') {
-    return session.payment_intent;
-  }
-
-  return session.payment_intent?.id ?? null;
-};
-
-const getPaymentIntentEmail = (paymentIntent: Stripe.PaymentIntent) => {
-  if (typeof paymentIntent.receipt_email === 'string' && paymentIntent.receipt_email.trim()) {
-    return paymentIntent.receipt_email.trim();
-  }
-
-  if (paymentIntent.metadata?.userEmail?.trim()) {
-    return paymentIntent.metadata.userEmail.trim();
-  }
-
-  return '';
-};
-
-const ensureHostProfile = async (userId: string, email: string) => {
-  await db
-    .insert(schema.profiles)
-    .values({
-      id: userId,
-      email,
-      role: 'host',
-      tier: 'BASIC',
-    })
-    .onConflictDoNothing();
-};
-
-const findExistingPurchase = async (
-  tx: typeof db,
-  ids: { stripeCheckoutSessionId?: string | null; stripePaymentIntentId?: string | null }
-) => {
-  if (ids.stripePaymentIntentId) {
-    const rows = await tx
-      .select()
-      .from(schema.paymentPurchases)
-      .where(eq(schema.paymentPurchases.stripePaymentIntentId, ids.stripePaymentIntentId))
-      .limit(1);
-
-    if (rows[0]) {
-      return rows[0];
-    }
-  }
-
-  if (ids.stripeCheckoutSessionId) {
-    const rows = await tx
-      .select()
-      .from(schema.paymentPurchases)
-      .where(eq(schema.paymentPurchases.stripeCheckoutSessionId, ids.stripeCheckoutSessionId))
-      .limit(1);
-
-    return rows[0] ?? null;
-  }
-
-  return null;
-};
-
-const markPurchaseStatusBySession = async (
-  checkoutSession: Stripe.Checkout.Session,
-  nextStatus: PurchaseStatusUpdate
-) => {
-  const sessionId = checkoutSession.id;
-  const now = new Date();
-
-  await db
-    .update(schema.paymentPurchases)
-    .set({
-      paymentStatus: nextStatus,
-      expiresAt: checkoutSession.expires_at ? new Date(checkoutSession.expires_at * 1000) : null,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(schema.paymentPurchases.stripeCheckoutSessionId, sessionId),
-        eq(schema.paymentPurchases.paymentStatus, 'PENDING')
-      )
-    );
-};
-
-const markPurchaseStatusByPaymentIntent = async (
-  paymentIntentId: string,
-  nextStatus: Exclude<PurchaseStatusUpdate, 'EXPIRED'>
-) => {
-  await db
-    .update(schema.paymentPurchases)
-    .set({
-      paymentStatus: nextStatus,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.paymentPurchases.stripePaymentIntentId, paymentIntentId),
-        eq(schema.paymentPurchases.paymentStatus, 'PENDING')
-      )
-    );
-};
-
-const markPurchasePaid = async ({
-  userId,
-  userEmail,
-  tier,
-  paymentMethodType,
-  stripeCheckoutSessionId = null,
-  stripePaymentIntentId = null,
-  stripeCustomerEmail = null,
-  expiresAt = null,
-}: PaidPurchaseInput) => {
-  if (!stripeCheckoutSessionId && !stripePaymentIntentId) {
-    throw new Error('Paid purchase update requires a Stripe session or payment intent identifier');
-  }
-
-  const now = new Date();
-
-  await db.transaction(async (tx) => {
-    const existingPurchase = await findExistingPurchase(tx, {
-      stripeCheckoutSessionId,
-      stripePaymentIntentId,
-    });
-
-    const nextValues = {
-      userId,
-      selectedTier: tier,
-      unlockedTier: tier,
-      paymentMethodType: paymentMethodType || existingPurchase?.paymentMethodType || CARD_PAYMENT_METHOD_TYPE,
-      stripeCheckoutSessionId: stripeCheckoutSessionId ?? existingPurchase?.stripeCheckoutSessionId ?? null,
-      stripePaymentIntentId: stripePaymentIntentId ?? existingPurchase?.stripePaymentIntentId ?? null,
-      stripeCustomerEmail: stripeCustomerEmail || existingPurchase?.stripeCustomerEmail || null,
-      paymentStatus: 'PAID' as const,
-      paidAt: now,
-      expiresAt: expiresAt ?? existingPurchase?.expiresAt ?? null,
-      updatedAt: now,
-    };
-
-    if (existingPurchase?.paymentStatus !== 'PAID') {
-      if (existingPurchase) {
-        await tx
-          .update(schema.paymentPurchases)
-          .set(nextValues)
-          .where(eq(schema.paymentPurchases.id, existingPurchase.id));
-      } else {
-        await tx.insert(schema.paymentPurchases).values(nextValues);
-      }
-    }
-
-    await tx
-      .insert(schema.profiles)
-      .values({
-        id: userId,
-        email: userEmail || stripeCustomerEmail || `${userId}@local.invalid`,
-        role: 'host',
-        tier,
-      })
-      .onConflictDoUpdate({
-        target: schema.profiles.id,
-        set: userEmail || stripeCustomerEmail
-          ? {
-              email: userEmail || stripeCustomerEmail!,
-              tier,
-            }
-          : {
-              tier,
-            },
-      });
-  });
-};
-
-const extractCheckoutPaymentInput = (checkoutSession: Stripe.Checkout.Session): PaidPurchaseInput => {
-  const userId = checkoutSession.metadata?.userId?.trim();
-  const userEmail = checkoutSession.metadata?.userEmail?.trim() || '';
-  const tier = parseTier(checkoutSession.metadata?.selectedTier);
-
-  if (!userId || !tier) {
-    throw new Error(`Stripe Checkout session ${checkoutSession.id} is missing required metadata`);
-  }
-
-  return {
-    userId,
-    userEmail,
-    tier,
-    paymentMethodType: CARD_PAYMENT_METHOD_TYPE,
-    stripeCheckoutSessionId: checkoutSession.id,
-    stripePaymentIntentId: getSessionPaymentIntentId(checkoutSession),
-    stripeCustomerEmail:
-      checkoutSession.customer_details?.email?.trim()
-      || checkoutSession.customer_email?.trim()
-      || userEmail
-      || null,
-    expiresAt: checkoutSession.expires_at ? new Date(checkoutSession.expires_at * 1000) : null,
-  };
-};
-
-const extractPaymentIntentInput = (paymentIntent: Stripe.PaymentIntent): PaidPurchaseInput => {
-  const userId = paymentIntent.metadata?.userId?.trim();
-  const userEmail = paymentIntent.metadata?.userEmail?.trim() || '';
-  const tier = parseTier(paymentIntent.metadata?.selectedTier);
-
-  if (!userId || !tier) {
-    throw new Error(`Stripe PaymentIntent ${paymentIntent.id} is missing required metadata`);
-  }
-
-  return {
-    userId,
-    userEmail,
-    tier,
-    paymentMethodType: CARD_PAYMENT_METHOD_TYPE,
-    stripePaymentIntentId: paymentIntent.id,
-    stripeCustomerEmail: getPaymentIntentEmail(paymentIntent) || userEmail || null,
-  };
-};
-
-const buildPurchaseResponse = (
-  purchase: typeof schema.paymentPurchases.$inferSelect,
-  stripeState?: {
-    stripeCheckoutStatus?: string | null;
-    stripePaymentStatus?: string | null;
-    stripePaymentIntentStatus?: string | null;
-  }
-) => {
-  const selectedTier = parseNullableTier(purchase.selectedTier);
-  const unlockedTier = parseNullableTier(purchase.unlockedTier);
-  const isUnlocked = purchase.paymentStatus === 'PAID' && Boolean(unlockedTier);
+const buildPurchaseResponse = (purchase: PurchaseRecord) => {
+  const selectedTier = parseNullableTier(purchase.selected_tier);
+  const unlockedTier = parseNullableTier(purchase.unlocked_tier);
+  const isUnlocked = purchase.payment_status === 'PAID' && Boolean(unlockedTier);
 
   return {
     purchaseId: purchase.id,
     selectedTier,
     unlockedTier,
-    paymentStatus: purchase.paymentStatus,
-    paymentMethodType: purchase.paymentMethodType,
+    paymentStatus: purchase.payment_status,
+    paymentMethodType: purchase.payment_method_type,
     isUnlocked,
     creationPath: unlockedTier ? getCreationPathForTier(unlockedTier) : null,
-    stripeCheckoutStatus: stripeState?.stripeCheckoutStatus ?? null,
-    stripePaymentStatus: stripeState?.stripePaymentStatus ?? null,
-    stripePaymentIntentStatus: stripeState?.stripePaymentIntentStatus ?? null,
   };
 };
 
+// ---------------------------------------------------------------------------
+// Authenticated routes
+// ---------------------------------------------------------------------------
+
 router.use(authMiddleware);
 
+/**
+ * GET /status — payment overview for the authenticated user.
+ */
 router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
     res.set('Cache-Control', 'no-store');
@@ -288,6 +61,9 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * GET /quote — price quote for a given tier.
+ */
 router.get('/quote', async (req: AuthRequest, res: Response) => {
   try {
     res.set('Cache-Control', 'no-store');
@@ -297,7 +73,7 @@ router.get('/quote', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid tier selection' });
     }
 
-    const quote = await getStripeTierPrice(tier);
+    const quote = getTierPrice(tier);
 
     res.json({
       tier,
@@ -310,14 +86,38 @@ router.get('/quote', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/payment-intents', async (req: AuthRequest, res: Response) => {
+/**
+ * POST /create-session — create a pending payment record.
+ *
+ * Body: { tier: string, paymentMethod?: 'card' | 'iris' }
+ *
+ * For card payments:
+ *   Returns { purchaseId, publicKey, amount, currency } so the frontend can
+ *   initialize the EveryPay payform and collect the card token.
+ *
+ * For IRIS payments:
+ *   Creates an IRIS session with EveryPay and returns
+ *   { purchaseId, signature, publicKey, amount, currency } so the frontend
+ *   can redirect the user to their banking app.
+ */
+router.post('/create-session', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const userEmail = req.user!.email;
     const tier = parseTier(req.body?.tier);
+    const paymentMethod: string = req.body?.paymentMethod ?? 'card';
 
     if (!tier) {
       return res.status(400).json({ message: 'Invalid tier selection' });
+    }
+
+    if (paymentMethod !== 'card' && paymentMethod !== 'iris') {
+      return res.status(400).json({ message: 'paymentMethod must be "card" or "iris"' });
+    }
+
+    const quote = getTierPrice(tier);
+    if (quote.amount <= 0) {
+      return res.status(400).json({ message: 'BASIC tier does not require payment' });
     }
 
     const overview = await getPaymentOverview(userId);
@@ -330,120 +130,144 @@ router.post('/payment-intents', async (req: AuthRequest, res: Response) => {
 
     await ensureHostProfile(userId, userEmail);
 
-    const quote = await getStripeTierPrice(tier);
-    const stripe = getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: quote.amount,
-      currency: quote.currency,
-      payment_method_types: [CARD_PAYMENT_METHOD_TYPE],
-      receipt_email: userEmail,
-      metadata: {
-        userId,
-        userEmail,
-        selectedTier: tier,
-      },
-      description: `Elite Memoriz ${tier} one-time purchase`,
-    });
-
-    const [purchase] = await db.insert(schema.paymentPurchases).values({
+    const purchase = await insertPendingPurchase({
       userId,
       selectedTier: tier,
-      paymentMethodType: CARD_PAYMENT_METHOD_TYPE,
-      stripePaymentIntentId: paymentIntent.id,
-      stripeCustomerEmail: userEmail,
-      paymentStatus: 'PENDING',
-      updatedAt: new Date(),
-    }).returning({
-      id: schema.paymentPurchases.id,
+      paymentMethodType: paymentMethod,
+      customerEmail: userEmail,
     });
 
-    res.status(201).json({
+    const baseResponse = {
       purchaseId: purchase.id,
-      paymentIntentId: paymentIntent.id,
-      clientSecret: paymentIntent.client_secret,
+      publicKey: getEveryPayPublicKey(),
       amount: quote.amount,
       currency: quote.currency,
-    });
-  } catch (error) {
-    console.error('Error creating Stripe PaymentIntent:', error);
-    res.status(500).json({ message: 'Failed to initialize payment' });
-  }
-});
+    };
 
-router.post('/checkout-sessions', async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const userEmail = req.user!.email;
-    const tier = parseTier(req.body?.tier);
+    if (paymentMethod === 'iris') {
+      const md = JSON.stringify({
+        purchaseId: purchase.id,
+        userId,
+        userEmail,
+        tier,
+      });
 
-    if (!tier) {
-      return res.status(400).json({ message: 'Invalid tier selection' });
-    }
+      const irisSession = await createIrisSession(
+        quote.amount,
+        quote.currency,
+        getEveryPayCallbackUrl(),
+        md,
+      );
 
-    const overview = await getPaymentOverview(userId);
-    if (overview.hasPaidTier && overview.entitledTier) {
-      return res.status(409).json({
-        message: 'A paid tier is already unlocked for this account',
-        ...overview,
+      return res.status(201).json({
+        ...baseResponse,
+        paymentMethod: 'iris',
+        signature: irisSession.signature,
       });
     }
 
-    await ensureHostProfile(userId, userEmail);
-
-    const stripe = getStripeClient();
-    const frontendUrl = getFrontendAppUrl(req.get('origin'));
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      client_reference_id: userId,
-      customer_email: userEmail,
-      line_items: [
-        {
-          price: getStripePriceId(tier),
-          quantity: 1,
-        },
-      ],
-      success_url: `${frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/payment/cancel?tier=${encodeURIComponent(tier)}`,
-      metadata: {
-        userId,
-        userEmail,
-        selectedTier: tier,
-      },
-      payment_intent_data: {
-        metadata: {
-          userId,
-          userEmail,
-          selectedTier: tier,
-        },
-      },
-    });
-
-    if (!session.url) {
-      return res.status(500).json({ message: 'Stripe Checkout session did not return a redirect URL' });
-    }
-
-    await db.insert(schema.paymentPurchases).values({
-      userId,
-      selectedTier: tier,
-      paymentMethodType: CARD_PAYMENT_METHOD_TYPE,
-      stripeCheckoutSessionId: session.id,
-      stripePaymentIntentId: getSessionPaymentIntentId(session),
-      stripeCustomerEmail: userEmail,
-      paymentStatus: 'PENDING',
-      expiresAt: session.expires_at ? new Date(session.expires_at * 1000) : null,
-      updatedAt: new Date(),
-    });
-
     res.status(201).json({
-      sessionId: session.id,
-      checkoutUrl: session.url,
+      ...baseResponse,
+      paymentMethod: 'card',
     });
   } catch (error) {
-    console.error('Error creating Stripe Checkout session:', error);
+    console.error('Error creating payment session:', error);
     res.status(500).json({ message: 'Failed to create payment session' });
   }
 });
 
+/**
+ * POST /charge — charge a card token obtained from the EveryPay payform.
+ *
+ * Body: { purchaseId: number, token: string }
+ *
+ * The backend calls EveryPay POST /payments to finalize the charge,
+ * then updates the purchase record accordingly.
+ */
+router.post('/charge', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const userEmail = req.user!.email;
+    const { purchaseId, token } = req.body ?? {};
+
+    if (!purchaseId || !token) {
+      return res.status(400).json({ message: 'purchaseId and token are required' });
+    }
+
+    const purchase = await getPurchaseById(Number(purchaseId));
+    if (!purchase) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+    if (purchase.user_id !== userId) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+    if (purchase.payment_status !== 'PENDING') {
+      return res.status(409).json({
+        message: `Purchase is already ${purchase.payment_status}`,
+        ...buildPurchaseResponse(purchase),
+      });
+    }
+
+    const tier = parseTier(purchase.selected_tier);
+    if (!tier) {
+      return res.status(400).json({ message: 'Invalid tier on purchase record' });
+    }
+
+    const quote = getTierPrice(tier);
+    const description = `Elite Memoriz ${tier} one-time purchase`;
+
+    const paymentResult = await chargeToken(
+      token,
+      quote.amount,
+      description,
+      userEmail,
+      { purchaseId: String(purchase.id), userId, tier },
+    );
+
+    if (paymentResult.status === 'Captured') {
+      await markPurchasePaid(
+        purchase.id,
+        paymentResult.token,
+        tier,
+        userId,
+        userEmail,
+      );
+
+      const updated = await getPurchaseById(purchase.id);
+      return res.json({
+        success: true,
+        ...buildPurchaseResponse(updated!),
+      });
+    }
+
+    await markPurchaseFailed(purchase.id);
+    const failed = await getPurchaseById(purchase.id);
+    res.status(402).json({
+      success: false,
+      message: 'Payment failed',
+      ...buildPurchaseResponse(failed!),
+    });
+  } catch (error: any) {
+    console.error('Error charging card token:', error);
+
+    if (error.statusCode === 402) {
+      const { purchaseId } = req.body ?? {};
+      if (purchaseId) {
+        try { await markPurchaseFailed(Number(purchaseId)); } catch {}
+      }
+      return res.status(402).json({
+        success: false,
+        message: error.everypayError?.message ?? 'Payment was declined',
+      });
+    }
+
+    res.status(500).json({ message: 'Failed to process payment' });
+  }
+});
+
+/**
+ * GET /purchase-status — check the status of a specific purchase.
+ */
 router.get('/purchase-status', async (req: AuthRequest, res: Response) => {
   try {
     res.set('Cache-Control', 'no-store');
@@ -454,210 +278,140 @@ router.get('/purchase-status', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'purchase_id is required' });
     }
 
-    let purchase = await getPurchaseById(purchaseId);
+    const purchase = await getPurchaseById(purchaseId);
     if (!purchase) {
       return res.status(404).json({ message: 'Payment attempt not found' });
     }
-
-    if (purchase.userId !== req.user!.id) {
+    if (purchase.user_id !== req.user!.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    let stripeState: {
-      stripeCheckoutStatus?: string | null;
-      stripePaymentStatus?: string | null;
-      stripePaymentIntentStatus?: string | null;
-    } = {};
-
-    if (purchase.stripePaymentIntentId) {
-      const paymentIntent = await getStripeClient().paymentIntents.retrieve(purchase.stripePaymentIntentId);
-
-      if (paymentIntent.metadata?.userId && paymentIntent.metadata.userId !== req.user!.id) {
-        return res.status(403).json({ message: 'Unauthorized' });
-      }
-
-      stripeState = {
-        stripePaymentIntentStatus: paymentIntent.status,
-      };
-
-      if (purchase.paymentStatus === 'PENDING' && paymentIntent.status === 'succeeded') {
-        await markPurchasePaid(extractPaymentIntentInput(paymentIntent));
-        purchase = await getPurchaseById(purchaseId);
-        if (!purchase) {
-          return res.status(404).json({ message: 'Payment attempt not found' });
-        }
-      }
-
-      if (
-        purchase.paymentStatus === 'PENDING'
-        && (paymentIntent.status === 'canceled' || paymentIntent.status === 'requires_payment_method')
-      ) {
-        await markPurchaseStatusByPaymentIntent(paymentIntent.id, 'FAILED');
-        purchase = await getPurchaseById(purchaseId);
-        if (!purchase) {
-          return res.status(404).json({ message: 'Payment attempt not found' });
-        }
-      }
-    } else if (purchase.stripeCheckoutSessionId) {
-      const checkoutSession = await getStripeClient().checkout.sessions.retrieve(purchase.stripeCheckoutSessionId);
-
-      if (checkoutSession.metadata?.userId && checkoutSession.metadata.userId !== req.user!.id) {
-        return res.status(403).json({ message: 'Unauthorized' });
-      }
-
-      stripeState = {
-        stripeCheckoutStatus: checkoutSession.status ?? null,
-        stripePaymentStatus: checkoutSession.payment_status ?? null,
-      };
-
-      if (
-        purchase.paymentStatus === 'PENDING'
-        && checkoutSession.status === 'complete'
-        && checkoutSession.payment_status === 'paid'
-      ) {
-        await markPurchasePaid(extractCheckoutPaymentInput(checkoutSession));
-        purchase = await getPurchaseById(purchaseId);
-        if (!purchase) {
-          return res.status(404).json({ message: 'Payment attempt not found' });
-        }
-      }
-
-      if (purchase.paymentStatus === 'PENDING' && checkoutSession.status === 'expired') {
-        await markPurchaseStatusBySession(checkoutSession, 'EXPIRED');
-        purchase = await getPurchaseById(purchaseId);
-        if (!purchase) {
-          return res.status(404).json({ message: 'Payment attempt not found' });
-        }
-      }
-    }
-
-    res.json(buildPurchaseResponse(purchase, stripeState));
+    res.json(buildPurchaseResponse(purchase));
   } catch (error) {
     console.error('Error checking payment status:', error);
     res.status(500).json({ message: 'Failed to verify payment status' });
   }
 });
 
-router.get('/checkout-session-status', async (req: AuthRequest, res: Response) => {
-  try {
-    res.set('Cache-Control', 'no-store');
-    const sessionId = typeof req.query.session_id === 'string' ? req.query.session_id.trim() : '';
+// ---------------------------------------------------------------------------
+// EveryPay webhook / IRIS callback handler (unauthenticated)
+// ---------------------------------------------------------------------------
 
-    if (!sessionId) {
-      return res.status(400).json({ message: 'session_id is required' });
+/**
+ * Handles both:
+ *  - IRIS callback POST (form-urlencoded from EveryPay to callback_url)
+ *  - IRIS webhook POST (JSON from EveryPay dashboard-configured webhook)
+ *
+ * Successful body contains: token, md, type, hash
+ * Failed body contains: error_status, error_code, error_message, hash, md
+ */
+export const everyPayWebhookHandler = async (req: Request, res: Response) => {
+  try {
+    const body = req.body ?? {};
+
+    const hash: string | undefined = body.hash;
+    const md: string | undefined = body.md;
+    const sourceToken: string | undefined = body.token;
+    const errorStatus: string | undefined = body.error_status;
+
+    if (!hash) {
+      return res.status(400).json({ message: 'Missing hash parameter' });
     }
 
-    let purchase = await getPurchaseBySessionId(sessionId);
+    const verification = verifyIrisHash(hash);
+    if (!verification.valid) {
+      console.error('EveryPay webhook: hash verification failed');
+      return res.status(400).json({ message: 'Invalid signature' });
+    }
+
+    let merchantData: {
+      purchaseId?: number;
+      userId?: string;
+      userEmail?: string;
+      tier?: string;
+    } = {};
+
+    if (md) {
+      try {
+        merchantData = JSON.parse(md);
+      } catch {
+        console.error('EveryPay webhook: failed to parse md field');
+        return res.status(400).json({ message: 'Invalid merchant data' });
+      }
+    }
+
+    const { purchaseId, userId, userEmail, tier } = merchantData;
+
+    if (!purchaseId || !userId || !tier) {
+      console.error('EveryPay webhook: missing required merchant data fields');
+      return res.status(400).json({ message: 'Incomplete merchant data' });
+    }
+
+    if (errorStatus) {
+      console.log(`EveryPay webhook: IRIS payment failed for purchase ${purchaseId}`, {
+        errorStatus,
+        errorCode: body.error_code,
+        errorMessage: body.error_message,
+      });
+      await markPurchaseFailed(purchaseId);
+      return res.json({ received: true, status: 'failed' });
+    }
+
+    if (!sourceToken) {
+      return res.status(400).json({ message: 'Missing source token' });
+    }
+
+    const purchase = await getPurchaseById(purchaseId);
     if (!purchase) {
-      return res.status(404).json({ message: 'Checkout session not found' });
+      console.error(`EveryPay webhook: purchase ${purchaseId} not found`);
+      return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    if (purchase.userId !== req.user!.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+    if (purchase.payment_status === 'PAID') {
+      return res.json({ received: true, status: 'already_paid' });
     }
 
-    const stripe = getStripeClient();
-    const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (checkoutSession.metadata?.userId && checkoutSession.metadata.userId !== req.user!.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+    const parsedTier = parseTier(tier);
+    if (!parsedTier) {
+      return res.status(400).json({ message: 'Invalid tier in merchant data' });
     }
 
-    if (
-      purchase.paymentStatus === 'PENDING'
-      && checkoutSession.status === 'complete'
-      && checkoutSession.payment_status === 'paid'
-    ) {
-      await markPurchasePaid(extractCheckoutPaymentInput(checkoutSession));
-      purchase = await getPurchaseBySessionId(sessionId);
-      if (!purchase) {
-        return res.status(404).json({ message: 'Checkout session not found' });
+    const quote = getTierPrice(parsedTier);
+    const description = `Elite Memoriz ${parsedTier} IRIS purchase`;
+
+    try {
+      const paymentResult = await chargeToken(
+        sourceToken,
+        quote.amount,
+        description,
+        userEmail,
+        { purchaseId: String(purchaseId), userId, tier: parsedTier },
+      );
+
+      if (paymentResult.status === 'Captured') {
+        await markPurchasePaid(
+          purchaseId,
+          paymentResult.token,
+          parsedTier,
+          userId,
+          userEmail ?? '',
+        );
+        console.log(`EveryPay webhook: IRIS payment captured for purchase ${purchaseId}`);
+        return res.json({ received: true, status: 'captured' });
       }
-    }
 
-    if (purchase.paymentStatus === 'PENDING' && checkoutSession.status === 'expired') {
-      await markPurchaseStatusBySession(checkoutSession, 'EXPIRED');
-      purchase = await getPurchaseBySessionId(sessionId);
-      if (!purchase) {
-        return res.status(404).json({ message: 'Checkout session not found' });
+      await markPurchaseFailed(purchaseId);
+      return res.json({ received: true, status: 'failed' });
+    } catch (chargeError: any) {
+      if (chargeError.statusCode === 400 && chargeError.everypayError?.code === 41001) {
+        console.log(`EveryPay webhook: source token already used for purchase ${purchaseId} (idempotent)`);
+        return res.json({ received: true, status: 'already_processed' });
       }
+      throw chargeError;
     }
-
-    const selectedTier = parseNullableTier(purchase.selectedTier);
-    const unlockedTier = parseNullableTier(purchase.unlockedTier);
-    const isUnlocked = purchase.paymentStatus === 'PAID' && Boolean(unlockedTier);
-
-    res.json({
-      sessionId,
-      selectedTier,
-      unlockedTier,
-      paymentStatus: purchase.paymentStatus,
-      isUnlocked,
-      creationPath: unlockedTier ? getCreationPathForTier(unlockedTier) : null,
-      stripeCheckoutStatus: checkoutSession.status ?? null,
-      stripePaymentStatus: checkoutSession.payment_status ?? null,
-    });
   } catch (error) {
-    console.error('Error checking Checkout session status:', error);
-    res.status(500).json({ message: 'Failed to verify payment status' });
-  }
-});
-
-export const stripeWebhookHandler = async (req: Request, res: Response) => {
-  const signature = req.headers['stripe-signature'];
-
-  if (!signature || Array.isArray(signature)) {
-    return res.status(400).send('Missing Stripe signature');
-  }
-
-  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
-
-  let event: Stripe.Event;
-
-  try {
-    event = getStripeClient().webhooks.constructEvent(rawBody, signature, getStripeWebhookSecret());
-  } catch (error) {
-    console.error('Stripe webhook signature verification failed:', error);
-    return res.status(400).send('Invalid Stripe signature');
-  }
-
-  try {
-    switch (event.type) {
-      case 'payment_intent.succeeded': {
-        await markPurchasePaid(extractPaymentIntentInput(event.data.object as Stripe.PaymentIntent));
-        break;
-      }
-      case 'payment_intent.payment_failed':
-      case 'payment_intent.canceled': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        await markPurchaseStatusByPaymentIntent(paymentIntent.id, 'FAILED');
-        break;
-      }
-      case 'checkout.session.completed':
-      case 'checkout.session.async_payment_succeeded': {
-        const checkoutSession = event.data.object as Stripe.Checkout.Session;
-
-        if (checkoutSession.payment_status === 'paid') {
-          await markPurchasePaid(extractCheckoutPaymentInput(checkoutSession));
-        }
-        break;
-      }
-      case 'checkout.session.async_payment_failed': {
-        await markPurchaseStatusBySession(event.data.object as Stripe.Checkout.Session, 'FAILED');
-        break;
-      }
-      case 'checkout.session.expired': {
-        await markPurchaseStatusBySession(event.data.object as Stripe.Checkout.Session, 'EXPIRED');
-        break;
-      }
-      default:
-        break;
-    }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error(`Stripe webhook handling failed for ${event.type}:`, error);
-    res.status(500).send('Webhook handling failed');
+    console.error('EveryPay webhook handling failed:', error);
+    res.status(500).json({ message: 'Webhook handling failed' });
   }
 };
 
