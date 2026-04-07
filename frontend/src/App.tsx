@@ -83,7 +83,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/create-event" element={<CreateEvent />} />
+            <Route
+              path="/create-event"
+              element={
+                <ProtectedRoute>
+                  <CreateEvent />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard/event/:id"
               element={

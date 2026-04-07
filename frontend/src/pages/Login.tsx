@@ -7,7 +7,13 @@ import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage }
 import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
-import { isExistingAccountError, normalizeAuthEmail } from '../lib/authEmail';
+import {
+  clearStoredAuthEmail,
+  getStoredAuthEmail,
+  isExistingAccountError,
+  normalizeAuthEmail,
+  setStoredAuthEmail,
+} from '../lib/authEmail';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const copy = {
@@ -68,7 +74,7 @@ const copy = {
 } as const;
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getStoredAuthEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
@@ -94,6 +100,10 @@ const Login = () => {
   useEffect(() => {
     setStoredPublicLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    setStoredAuthEmail(email);
+  }, [email]);
 
   useEffect(() => {
     let isActive = true;
@@ -129,6 +139,7 @@ const Login = () => {
 
     try {
       const normalizedEmail = normalizeAuthEmail(email);
+      setStoredAuthEmail(normalizedEmail);
       if (isRegistering) {
         if (password !== confirmPassword) {
           throw new Error(pageCopy.mismatch);
@@ -164,6 +175,7 @@ const Login = () => {
             throw new Error(errorData?.message || 'Profile creation failed. Please try signing in instead.');
           }
 
+          clearStoredAuthEmail();
           navigate(redirectPath, { replace: true });
         } else {
           alert(pageCopy.checkEmail);
@@ -180,6 +192,7 @@ const Login = () => {
         }
 
         if (data.session) {
+          clearStoredAuthEmail();
           navigate(redirectPath, { replace: true });
         }
       }

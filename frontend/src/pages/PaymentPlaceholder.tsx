@@ -106,8 +106,9 @@ const copy = {
     eyebrow: 'Ασφαλής Πληρωμή',
     title: 'Επιβεβαίωση πακέτου και πληρωμή',
     body: 'Επίλεξε μέθοδο πληρωμής — κάρτα ή IRIS. Μετά την ολοκλήρωση το πακέτο ξεκλειδώνεται αυτόματα.',
-    pendingTitle: 'Υπάρχει πληρωμή IRIS σε εξέλιξη',
-    pendingBody: 'Αν ολοκλήρωσες τη μεταφορά στην τράπεζα, πάτα παρακάτω για έλεγχο κατάστασης.',
+    pendingTitle: 'Υπάρχει πληρωμή σε εξέλιξη',
+    pendingBody: 'Αυτός ο λογαριασμός έχει ήδη μια pending πληρωμή. Συνέχισε με το ίδιο πακέτο και την ίδια μέθοδο μέχρι να λυθεί.',
+    pendingMethodLocked: 'Όσο η πληρωμή είναι pending δεν μπορείς να αλλάξεις πακέτο ή μέθοδο από εδώ.',
     unlockedTitle: 'Το πακέτο σου έχει ήδη ξεκλειδωθεί',
     unlockedBody: 'Δεν χρειάζεται νέα πληρωμή. Μπορείς να συνεχίσεις κατευθείαν στη δημιουργία event.',
     selectedPlan: 'Επιλεγμένο πακέτο',
@@ -156,8 +157,9 @@ const copy = {
     eyebrow: 'Secure Payment',
     title: 'Plan confirmation and payment',
     body: 'Choose your payment method — card or IRIS bank transfer. Your tier unlocks automatically after confirmation.',
-    pendingTitle: 'An IRIS payment is pending',
-    pendingBody: 'If you completed the bank transfer, click below to check the status.',
+    pendingTitle: 'A payment is already in progress',
+    pendingBody: 'This account already has a pending payment. Continue with the same tier and payment method until it resolves.',
+    pendingMethodLocked: 'While the payment is pending, you cannot switch tier or payment method here.',
     unlockedTitle: 'Your tier is already unlocked',
     unlockedBody: 'No new payment is needed. You can continue straight to event creation.',
     selectedPlan: 'Selected tier',
@@ -350,22 +352,59 @@ const PaymentPlaceholder = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const displayTier = paymentOverview?.entitledTier ?? requestedTier;
+  const pendingSelectedTier = paymentOverview?.latestPaymentStatus === 'PENDING'
+    ? paymentOverview.latestSelectedTier
+    : null;
+  const displayTier = paymentOverview?.entitledTier ?? pendingSelectedTier ?? requestedTier;
   const tierCopy = pageCopy.tiers[displayTier];
   const isPaid = Boolean(paymentOverview?.hasPaidTier && paymentOverview.entitledTier);
+  const hasBackendPendingPurchase = Boolean(
+    !isPaid
+    && paymentOverview?.latestPaymentStatus === 'PENDING'
+    && paymentOverview.latestPurchaseId,
+  );
+  const pendingPaymentMethod = hasBackendPendingPurchase
+    ? paymentOverview?.latestPaymentMethodType === 'iris'
+      ? 'iris'
+      : 'card'
+    : null;
 
   // Check for pending IRIS payment from localStorage
   const irisPending = getIrisPending();
-  const showIrisPendingBanner = !isPaid && irisPending != null;
+  const shouldUseStoredIrisPending = Boolean(
+    !isPaid
+    && !hasBackendPendingPurchase
+    && !overviewLoading
+    && paymentOverview?.latestPaymentStatus === 'NOT_STARTED'
+    && irisPending != null,
+  );
+  const showPendingBanner = hasBackendPendingPurchase || shouldUseStoredIrisPending;
+  const pendingStatusPurchaseId = hasBackendPendingPurchase
+    ? paymentOverview?.latestPurchaseId ?? null
+    : shouldUseStoredIrisPending
+      ? irisPending?.purchaseId ?? null
+      : null;
+  const showPendingStatusButton = Boolean(
+    pendingStatusPurchaseId
+    && ((hasBackendPendingPurchase && pendingPaymentMethod === 'iris') || shouldUseStoredIrisPending),
+  );
+  const cardTabDisabled = hasBackendPendingPurchase && pendingPaymentMethod !== 'card';
+  const irisTabDisabled = hasBackendPendingPurchase && pendingPaymentMethod !== 'iris';
 
   const draftPath = draftSummary.package
     ? '/create-event'
-    : `/create-event?tier=${encodeURIComponent(requestedTier)}`;
+    : `/create-event?tier=${encodeURIComponent(displayTier)}`;
 
   // Reset session when tier changes
   useEffect(() => {
     setPaymentSession(null);
   }, [displayTier]);
+
+  useEffect(() => {
+    if (hasBackendPendingPurchase && pendingPaymentMethod) {
+      setPaymentMethodTab(pendingPaymentMethod);
+    }
+  }, [hasBackendPendingPurchase, pendingPaymentMethod]);
 
   // Fetch tier price quote
   useEffect(() => {
@@ -524,7 +563,7 @@ const PaymentPlaceholder = () => {
                   </div>
                 </div>
               </div>
-            ) : showIrisPendingBanner ? (
+            ) : showPendingBanner ? (
               <div className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
                 <div className="flex items-start gap-3">
                   <div className="rounded-xl bg-amber-500/15 p-3 text-amber-300">
@@ -533,6 +572,9 @@ const PaymentPlaceholder = () => {
                   <div>
                     <p className="font-semibold text-white">{pageCopy.pendingTitle}</p>
                     <p className="mt-2 text-sm leading-6 text-gray-300">{pageCopy.pendingBody}</p>
+                    {hasBackendPendingPurchase && (
+                      <p className="mt-2 text-sm leading-6 text-amber-100">{pageCopy.pendingMethodLocked}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -572,15 +614,17 @@ const PaymentPlaceholder = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      if (cardTabDisabled) return;
                       setPaymentMethodTab('card');
                       setPaymentSession(null);
                       setError(null);
                     }}
+                    disabled={cardTabDisabled}
                     className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
                       paymentMethodTab === 'card'
                         ? 'bg-indigo-600 text-white'
                         : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <CreditCard size={16} />
                     {pageCopy.tabCard}
@@ -588,20 +632,28 @@ const PaymentPlaceholder = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      if (irisTabDisabled) return;
                       setPaymentMethodTab('iris');
                       setPaymentSession(null);
                       setError(null);
                     }}
+                    disabled={irisTabDisabled}
                     className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
                       paymentMethodTab === 'iris'
                         ? 'bg-indigo-600 text-white'
                         : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <Landmark size={16} />
                     {pageCopy.tabIris}
                   </button>
                 </div>
+
+                {hasBackendPendingPurchase && (
+                  <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    {pageCopy.pendingMethodLocked}
+                  </div>
+                )}
 
                 {/* Card tab */}
                 {paymentMethodTab === 'card' && (
@@ -678,12 +730,12 @@ const PaymentPlaceholder = () => {
 
             {/* Action buttons */}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {showIrisPendingBanner && irisPending && (
+              {showPendingStatusButton && pendingStatusPurchaseId && (
                 <button
                   type="button"
                   onClick={() =>
                     navigate(
-                      `/payment/success?purchase_id=${encodeURIComponent(String(irisPending.purchaseId))}`,
+                      `/payment/success?purchase_id=${encodeURIComponent(String(pendingStatusPurchaseId))}`,
                     )
                   }
                   className="inline-flex items-center justify-center rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"

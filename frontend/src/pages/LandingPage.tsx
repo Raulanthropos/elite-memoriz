@@ -16,14 +16,14 @@ const tierMeta: Record<Tier, { price: string; accent: string }> = {
 
 const copy = {
   el: {
-    nav: { how: 'Πως λειτουργεί', plans: 'Πακέτα', login: 'Σύνδεση host' },
+    nav: { how: 'Πως λειτουργεί', plans: 'Πακέτα', login: 'Σύνδεση host', register: 'Εγγραφή host' },
     hero: {
       badge: 'Χωρίς app για τους καλεσμένους',
       title: 'Το ιδιωτικό album που γεμίζει',
       accent: 'ζωντανά από το event',
       body:
         'Για γάμους, βαφτίσεις, parties και εταιρικά events. Ο host δίνει ένα QR και συγκεντρώνει όλο το υλικό σε έναν καθαρό χώρο.',
-      primary: 'Ξεκίνα τη δημιουργία event',
+      primary: 'Δημιούργησε host account',
       secondary: 'Δες τα πακέτα',
       selected: 'Προεπισκόπηση πακέτου',
       preview: 'Τι ξεκινά έτοιμο',
@@ -36,10 +36,10 @@ const copy = {
     ],
     stepsTitle: 'Πως λειτουργεί στην πράξη',
     steps: [
-      ['1. Συμπληρώνεις τα στοιχεία', 'Ορίζεις τίτλο, ημερομηνία και τύπο event.'],
-      ['2. Επιλέγεις πακέτο', 'Βλέπεις τα διαθέσιμα tiers μέσα στη φόρμα και διαλέγεις αυτό που θέλεις.'],
-      ['3. Δημιουργείς host account', 'Ο επισκέπτης προχωρά σε registration για να συνεχίσει το hosting flow.'],
-      ['4. Προχωράς σε payment', 'Το payment step ακολουθεί αμέσως μετά και έπειτα γίνεται η τελική ενεργοποίηση.'],
+      ['1. Δημιουργείς host account', 'Ο host ξεκινά με registration για να μπει σωστά στο onboarding flow.'],
+      ['2. Στήνεις το event', 'Ορίζεις τίτλο, ημερομηνία και τύπο event μέσα από το Create Event.'],
+      ['3. Επιλέγεις πακέτο', 'Βλέπεις τα διαθέσιμα tiers μέσα στη φόρμα και κλειδώνεις αυτό που θέλεις.'],
+      ['4. Προχωράς σε payment', 'Το payment step ακολουθεί αμέσως μετά για την τελική ενεργοποίηση.'],
     ],
     experienceTitle: 'Τι πρέπει να νιώθει ο πελάτης',
     experienceBody:
@@ -55,53 +55,53 @@ const copy = {
       ['Live gallery', 'Το υλικό συγκεντρώνεται σε ένα καθαρό album που γεμίζει ζωντανά κατά τη διάρκεια του event.'],
       ['Καθαρή επιλογή πακέτου', 'Ο επισκέπτης καταλαβαίνει άμεσα τι περιλαμβάνει κάθε tier και ποιο βήμα ακολουθεί.'],
     ],
-    pricingTitle: 'Δες τα πακέτα και συνέχισε στο Create Event',
+    pricingTitle: 'Δες τα πακέτα πριν την τελική επιλογή',
     pricingBody:
-      'Κάθε πακέτο καλύπτει ένα hosted event. Εδώ βλέπεις τις διαφορές των tiers και μέσα στο Create Event κάνεις την τελική επιλογή.',
+      'Κάθε πακέτο καλύπτει ένα hosted event. Η landing page λειτουργεί ως preview και η τελική επιλογή γίνεται αργότερα μέσα στο Create Event.',
     tiers: {
       BASIC: {
         name: 'Basic',
         audience: 'Για ένα πιο μικρό και άμεσο event',
         description: 'Καθαρή επιλογή για ένα event με όσα χρειάζονται χωρίς περιττή πολυπλοκότητα.',
         features: ['Έως 100 καλεσμένοι', '10 GB cloud storage', 'Διατήρηση δεδομένων για 1 μήνα'],
-        cta: 'Συνέχεια στη φόρμα',
+        cta: 'Προεπισκόπηση πακέτου',
       },
       PREMIUM: {
         name: 'Premium',
         audience: 'Για events με μεγαλύτερη ροή και πιο πλούσιο storytelling',
         description: 'Η πιο ισορροπημένη επιλογή όταν θέλεις περισσότερο χώρο και AI stories στο ίδιο event.',
         features: ['Έως 300 καλεσμένοι', '50 GB cloud storage', 'AI stories', 'Διατήρηση δεδομένων για 3 μήνες'],
-        cta: 'Συνέχεια στη φόρμα',
+        cta: 'Προεπισκόπηση πακέτου',
       },
       LUXURY: {
         name: 'Luxury',
         audience: 'Για premium παραγωγές και πιο immersive εμπειρία',
         description: 'Το πιο πλήρες πακέτο, με μεγαλύτερη χωρητικότητα, AI stories και 360 προβολή εικόνας.',
         features: ['Έως 500 καλεσμένοι', '200 GB cloud storage', 'AI stories', '360° image view', 'Διατήρηση δεδομένων για 6 μήνες'],
-        cta: 'Συνέχεια στη φόρμα',
+        cta: 'Προεπισκόπηση πακέτου',
       },
     },
     current: 'Τρέχουσα προεπισκόπηση',
-    continueWith: 'Συνέχεια στη φόρμα',
+    continueWith: 'Δημιούργησε host account',
     faqTitle: 'Πριν ξεκινήσεις',
     faq: [
       ['Χρειάζεται app ο καλεσμένος;', 'Όχι. Μπαίνει από QR ή link και ανεβάζει από browser.'],
       ['Η επιλογή tier εδώ είναι οριστική;', 'Όχι. Εδώ βλέπεις τα πακέτα και η τελική επιλογή γίνεται μέσα στο Create Event.'],
-      ['Αν δεν είμαι συνδεδεμένος;', 'Συμπληρώνεις τα στοιχεία, διαλέγεις πακέτο, κάνεις host registration και μετά προχωράς στο payment βήμα.'],
+      ['Αν δεν είμαι συνδεδεμένος;', 'Ξεκινάς με host registration, μετά στήνεις το event, διαλέγεις πακέτο και τέλος προχωράς στο payment βήμα.'],
     ],
-    finalTitle: 'Ξεκίνα με πιο καθαρό flow',
-    finalBody: 'Δες τα tiers, μπες στο Create Event και οδήγησε τον επισκέπτη σε μια καθαρή διαδρομή: στοιχεία, πακέτο, registration και payment.',
+    finalTitle: 'Ξεκίνα με registration-first flow',
+    finalBody: 'Κάνε πρώτα host registration και μετά οδήγησε τον host σε μια καθαρή διαδρομή: Create Event, επιλογή πακέτου και payment.',
     footer: 'Όλα τα δικαιώματα διατηρούνται.',
   },
   en: {
-    nav: { how: 'How it works', plans: 'Plans', login: 'Host sign in' },
+    nav: { how: 'How it works', plans: 'Plans', login: 'Host sign in', register: 'Host register' },
     hero: {
       badge: 'No app required for guests',
       title: 'The private album that fills',
       accent: 'live during the event',
       body:
         'Built for weddings, baptisms, parties, and corporate events. The host shares one QR and gathers every memory in one clean space.',
-      primary: 'Start event setup',
+      primary: 'Create host account',
       secondary: 'View plans',
       selected: 'Plan preview',
       preview: 'What starts ready',
@@ -114,10 +114,10 @@ const copy = {
     ],
     stepsTitle: 'How it works in practice',
     steps: [
-      ['1. Fill in the details', 'Set the title, date, and type of event.'],
-      ['2. Choose the plan', 'Review the available tiers inside the form and pick the one that fits best.'],
-      ['3. Create the host account', 'The visitor moves into registration to continue the hosting flow.'],
-      ['4. Continue to payment', 'Payment comes next, followed by the final activation step.'],
+      ['1. Create the host account', 'The host starts with registration to enter the onboarding flow correctly.'],
+      ['2. Build the event', 'Set the title, date, and type of event inside Create Event.'],
+      ['3. Choose the plan', 'Review the available tiers inside the form and lock the one that fits best.'],
+      ['4. Continue to payment', 'Payment comes next for the final activation step.'],
     ],
     experienceTitle: 'How the product should feel',
     experienceBody:
@@ -133,42 +133,42 @@ const copy = {
       ['Live gallery', 'Memories collect inside one clean album that fills in real time during the event.'],
       ['Clear plan choice', 'Visitors should understand what each tier includes and what the next step will be.'],
     ],
-    pricingTitle: 'Review the plans and continue into Create Event',
+    pricingTitle: 'Review the plans before the final choice',
     pricingBody:
-      'Every plan covers one hosted event. The homepage helps users compare the tiers, and the final plan choice happens inside Create Event.',
+      'Every plan covers one hosted event. The homepage is for comparison only, and the final plan choice happens later inside Create Event.',
     tiers: {
       BASIC: {
         name: 'Basic',
         audience: 'For a smaller, straightforward event',
         description: 'A clean choice for one event with the essentials covered.',
         features: ['Up to 100 guests', '10 GB cloud storage', '1 month data retention'],
-        cta: 'Continue to the form',
+        cta: 'Preview this plan',
       },
       PREMIUM: {
         name: 'Premium',
         audience: 'For larger events with stronger storytelling needs',
         description: 'The most balanced choice for one event with more room, more storage, and AI stories.',
         features: ['Up to 300 guests', '50 GB cloud storage', 'AI stories', '3 months data retention'],
-        cta: 'Continue to the form',
+        cta: 'Preview this plan',
       },
       LUXURY: {
         name: 'Luxury',
         audience: 'For premium productions and immersive delivery',
         description: 'The fullest package for one event, with the highest capacity and 360 image viewing.',
         features: ['Up to 500 guests', '200 GB cloud storage', 'AI stories', '360° image view', '6 months data retention'],
-        cta: 'Continue to the form',
+        cta: 'Preview this plan',
       },
     },
     current: 'Current preview',
-    continueWith: 'Continue to the form',
+    continueWith: 'Create host account',
     faqTitle: 'Before you begin',
     faq: [
       ['Do guests need an app?', 'No. They join through a QR code or link and upload from the browser.'],
       ['Is the plan choice final here?', 'No. The homepage is for comparison, and the final plan choice happens inside Create Event.'],
-      ['What if I am not signed in?', 'The visitor fills in the event details, chooses a plan, creates a host account, and then continues to payment.'],
+      ['What if I am not signed in?', 'Start with host registration, then create the event, choose a plan, and continue to payment.'],
     ],
-    finalTitle: 'Start with a clearer flow',
-    finalBody: 'Review the tiers, enter Create Event, and guide the visitor through one clear path: details, plan, registration, and payment.',
+    finalTitle: 'Start with a registration-first flow',
+    finalBody: 'Begin with host registration, then guide the host through Create Event, plan selection, and payment in one clear path.',
     footer: 'All rights reserved.',
   },
 } as const;
@@ -195,8 +195,14 @@ const LandingPage = () => {
     if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const continueToCreateEvent = () => {
-    navigate('/create-event');
+  const registerRedirect = encodeURIComponent('/create-event');
+
+  const continueToRegister = () => {
+    navigate(`/register?redirect=${registerRedirect}`);
+  };
+
+  const continueToLogin = () => {
+    navigate(`/login?redirect=${registerRedirect}`);
   };
 
   return (
@@ -237,23 +243,41 @@ const LandingPage = () => {
           </div>
 
           <div className="mt-3 flex justify-center sm:hidden">
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
-            >
-              {pageCopy.nav.login}
-            </button>
+            <div className="flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={continueToRegister}
+                className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
+              >
+                {pageCopy.nav.register}
+              </button>
+              <button
+                type="button"
+                onClick={continueToLogin}
+                className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+              >
+                {pageCopy.nav.login}
+              </button>
+            </div>
           </div>
 
           <div className="hidden justify-end sm:flex sm:pt-0">
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              className="inline-flex justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
-            >
-              {pageCopy.nav.login}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={continueToRegister}
+                className="inline-flex justify-center whitespace-nowrap rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
+              >
+                {pageCopy.nav.register}
+              </button>
+              <button
+                type="button"
+                onClick={continueToLogin}
+                className="inline-flex justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+              >
+                {pageCopy.nav.login}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -273,7 +297,7 @@ const LandingPage = () => {
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <button
                 type="button"
-                onClick={continueToCreateEvent}
+                onClick={continueToRegister}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-stone-950/15"
               >
                 {pageCopy.hero.primary}
@@ -355,7 +379,7 @@ const LandingPage = () => {
                   </ul>
                   <button
                     type="button"
-                    onClick={continueToCreateEvent}
+                    onClick={continueToRegister}
                     className="mt-5 inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white"
                   >
                     {pageCopy.continueWith}
@@ -370,9 +394,9 @@ const LandingPage = () => {
         <section id="how-it-works" className="border-y border-stone-200 bg-white py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.stepsTitle}</h2>
-            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+            <div className="mt-12 grid gap-6 lg:grid-cols-4">
               {pageCopy.steps.map(([title, description], index) => {
-                const Icon = [Sparkles, CheckCircle2, UserRoundPlus, CreditCard][index];
+                const Icon = [UserRoundPlus, Sparkles, CheckCircle2, CreditCard][index];
                 return (
                   <div key={title} className="rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-8 shadow-lg shadow-stone-200/40">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-950 text-white">
@@ -461,7 +485,7 @@ const LandingPage = () => {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        continueToCreateEvent();
+                        setSelectedTier(tier);
                       }}
                       className={`mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold ${
                         isSelected ? 'bg-white text-stone-950' : 'bg-stone-950 text-white'
@@ -485,7 +509,7 @@ const LandingPage = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={continueToCreateEvent}
+                  onClick={continueToRegister}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-6 py-3.5 text-sm font-semibold text-white"
                 >
                   {pageCopy.continueWith}
@@ -517,7 +541,7 @@ const LandingPage = () => {
             <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
               <button
                 type="button"
-                onClick={continueToCreateEvent}
+                onClick={continueToRegister}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white"
               >
                 {pageCopy.continueWith}
@@ -525,7 +549,7 @@ const LandingPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/login')}
+                onClick={continueToLogin}
                 className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-7 py-4 text-base font-semibold text-stone-800"
               >
                 {pageCopy.nav.login}

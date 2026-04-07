@@ -7,13 +7,19 @@ import { PublicLanguageToggle } from '../components/PublicLanguageToggle';
 import { getStoredPublicLanguage, setStoredPublicLanguage, type PublicLanguage } from '../lib/publicLanguage';
 import { getPasswordRequirements, isPasswordStrong, type PasswordRequirementKey } from '../lib/passwordValidation';
 import { getEmailRedirectUrl, sanitizeRedirectPath } from '../lib/authRedirect';
-import { isExistingAccountError, normalizeAuthEmail } from '../lib/authEmail';
+import {
+  clearStoredAuthEmail,
+  getStoredAuthEmail,
+  isExistingAccountError,
+  normalizeAuthEmail,
+  setStoredAuthEmail,
+} from '../lib/authEmail';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const copy = {
   el: {
     title: 'Δημιούργησε Host Account',
-    subtitle: 'Μετά την εγγραφή θα συνεχίσεις κατευθείαν στο payment.',
+    subtitle: 'Μετά την εγγραφή θα συνεχίσεις στη δημιουργία του event σου.',
     email: 'Email',
     password: 'Κωδικός',
     confirm: 'Επιβεβαίωση',
@@ -35,7 +41,7 @@ const copy = {
   },
   en: {
     title: 'Create Host Account',
-    subtitle: 'After registration you will continue straight to payment.',
+    subtitle: 'After registration you will continue to your event setup.',
     email: 'Email',
     password: 'Password',
     confirm: 'Confirm',
@@ -58,7 +64,7 @@ const copy = {
 } as const;
 
 const Register = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getStoredAuthEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,6 +87,10 @@ const Register = () => {
   useEffect(() => {
     setStoredPublicLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    setStoredAuthEmail(email);
+  }, [email]);
 
   useEffect(() => {
     if (import.meta.env.DEV && existingAccountRedirectPath !== redirectPath) {
@@ -137,6 +147,7 @@ const Register = () => {
 
     try {
       const normalizedEmail = normalizeAuthEmail(email);
+      setStoredAuthEmail(normalizedEmail);
       const { data, error: authError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
@@ -149,21 +160,22 @@ const Register = () => {
         throw authError;
       }
 
-        if (data.session) {
-          const response = await fetch(`${API_URL}/api/host/register-profile`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-            },
-          });
+      if (data.session) {
+        const response = await fetch(`${API_URL}/api/host/register-profile`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        });
 
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            await supabase.auth.signOut();
-            throw new Error(errorData?.message || 'Profile creation failed. Please try signing in instead.');
-          }
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          await supabase.auth.signOut();
+          throw new Error(errorData?.message || 'Profile creation failed. Please try signing in instead.');
+        }
 
-          navigate(redirectPath, { replace: true });
+        clearStoredAuthEmail();
+        navigate(redirectPath, { replace: true });
       } else {
         alert(pageCopy.checkEmail);
         navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`, { replace: true });

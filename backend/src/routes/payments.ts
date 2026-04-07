@@ -128,9 +128,59 @@ router.post('/create-session', async (req: AuthRequest, res: Response) => {
 
     const pendingPurchase = await getLatestPendingPurchaseForUser(userId);
     if (pendingPurchase) {
-      return res.status(409).json({
-        message: 'A payment attempt is already pending for this account',
-        ...buildPurchaseResponse(pendingPurchase),
+      const pendingTier = parseTier(pendingPurchase.selected_tier);
+      if (!pendingTier) {
+        return res.status(400).json({ message: 'Invalid tier on pending purchase record' });
+      }
+
+      const pendingPaymentMethod = pendingPurchase.payment_method_type === 'iris' ? 'iris' : 'card';
+
+      if (pendingTier !== tier) {
+        return res.status(409).json({
+          message: 'A pending payment already exists for a different tier. Resolve it before changing plan.',
+          ...buildPurchaseResponse(pendingPurchase),
+        });
+      }
+
+      if (pendingPaymentMethod !== paymentMethod) {
+        return res.status(409).json({
+          message: 'A pending payment already exists for a different payment method. Resolve it before switching methods.',
+          ...buildPurchaseResponse(pendingPurchase),
+        });
+      }
+
+      const reusedResponse = {
+        purchaseId: pendingPurchase.id,
+        publicKey: getEveryPayPublicKey(),
+        amount: quote.amount,
+        currency: quote.currency,
+      };
+
+      if (paymentMethod === 'iris') {
+        const md = JSON.stringify({
+          purchaseId: pendingPurchase.id,
+          userId,
+          userEmail,
+          tier,
+        });
+
+        const irisSession = await createIrisSession(
+          quote.amount,
+          quote.currency,
+          getEveryPayCallbackUrl(),
+          md,
+        );
+
+        return res.status(200).json({
+          ...reusedResponse,
+          paymentMethod: 'iris',
+          signature: irisSession.signature,
+        });
+      }
+
+      return res.status(200).json({
+        ...reusedResponse,
+        paymentMethod: 'card',
       });
     }
 
