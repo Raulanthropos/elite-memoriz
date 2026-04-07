@@ -355,6 +355,23 @@ export const getLatestPaidPurchaseForUser = async (userId: string) => {
   };
 };
 
+export const getLatestPendingPurchaseForUser = async (
+  userId: string,
+): Promise<PurchaseRecord | null> => {
+  const { data, error } = await getSupabaseClient()
+    .from('payment_purchases')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('payment_status', 'PENDING')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as PurchaseRecord | null;
+};
+
 export const getPaymentOverview = async (userId: string) => {
   const supabase = getSupabaseClient();
 

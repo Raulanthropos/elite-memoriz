@@ -8,6 +8,7 @@ import {
   getCreationPathForTier,
   getEveryPayCallbackUrl,
   getEveryPayPublicKey,
+  getLatestPendingPurchaseForUser,
   getPaymentOverview,
   getPurchaseById,
   getTierPrice,
@@ -122,6 +123,14 @@ router.post('/create-session', async (req: AuthRequest, res: Response) => {
       return res.status(409).json({
         message: 'A paid tier is already unlocked for this account',
         ...overview,
+      });
+    }
+
+    const pendingPurchase = await getLatestPendingPurchaseForUser(userId);
+    if (pendingPurchase) {
+      return res.status(409).json({
+        message: 'A payment attempt is already pending for this account',
+        ...buildPurchaseResponse(pendingPurchase),
       });
     }
 
