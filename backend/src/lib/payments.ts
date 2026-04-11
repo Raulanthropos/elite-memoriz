@@ -26,6 +26,10 @@ export type PurchaseRecord = {
   updated_at: string;
 };
 
+const PENDING_PURCHASE_TTL_MS = 5 * 60 * 1000;
+export const EXPIRED_PENDING_PURCHASE_MESSAGE =
+  'This payment session expired before confirmation. Please try again.';
+
 // ---------------------------------------------------------------------------
 // Environment helpers
 // ---------------------------------------------------------------------------
@@ -70,6 +74,8 @@ export const getEveryPayCallbackUrl = () => getRequiredEnv('EVERYPAY_CALLBACK_UR
 // ---------------------------------------------------------------------------
 // Tier pricing (amount in cents, EUR)
 // ---------------------------------------------------------------------------
+// 4556940988073158
+// 5217925525906273
 
 export const getTierPrice = (tier: Tier): TierPriceQuote => {
   const prices: Record<Tier, number> = {
@@ -253,6 +259,8 @@ export const insertPendingPurchase = async (params: {
   paymentMethodType: string;
   customerEmail: string;
 }) => {
+  const now = new Date();
+
   const { data, error } = await getSupabaseClient()
     .from('payment_purchases')
     .insert({
@@ -261,7 +269,8 @@ export const insertPendingPurchase = async (params: {
       payment_method_type: params.paymentMethodType,
       everypay_customer_email: params.customerEmail,
       payment_status: 'PENDING',
-      updated_at: new Date().toISOString(),
+      expires_at: new Date(now.getTime() + PENDING_PURCHASE_TTL_MS).toISOString(),
+      updated_at: now.toISOString(),
     })
     .select('id')
     .single();
@@ -280,7 +289,7 @@ export const markPurchasePaid = async (
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
 
-  const { error: purchaseError } = await supabase
+  const { data: updatedPurchase, error: purchaseError } = await supabase
     .from('payment_purchases')
     .update({
       payment_status: 'PAID',
@@ -290,9 +299,14 @@ export const markPurchasePaid = async (
       updated_at: now,
     })
     .eq('id', purchaseId)
-    .eq('payment_status', 'PENDING');
+    .eq('payment_status', 'PENDING')
+    .select('*')
+    .maybeSingle();
 
   if (purchaseError) throw purchaseError;
+  if (!updatedPurchase) {
+    throw new Error(`Purchase ${purchaseId} is no longer pending`);
+  }
 
   const { error: profileError } = await supabase
     .from('profiles')
@@ -302,19 +316,25 @@ export const markPurchasePaid = async (
     );
 
   if (profileError) throw profileError;
+
+  return updatedPurchase as PurchaseRecord;
 };
 
 export const markPurchaseFailed = async (purchaseId: number) => {
-  const { error } = await getSupabaseClient()
+  const { data, error } = await getSupabaseClient()
     .from('payment_purchases')
     .update({
       payment_status: 'FAILED',
       updated_at: new Date().toISOString(),
     })
     .eq('id', purchaseId)
-    .eq('payment_status', 'PENDING');
+    .eq('payment_status', 'PENDING')
+    .select('*')
+    .maybeSingle();
 
   if (error) throw error;
+
+  return data as PurchaseRecord | null;
 };
 
 export const getPurchaseById = async (
@@ -328,6 +348,46 @@ export const getPurchaseById = async (
 
   if (error) throw error;
   return data;
+};
+
+const isPendingPurchaseExpired = (purchase: PurchaseRecord, now = new Date()) => {
+  if (purchase.payment_status !== 'PENDING' || !purchase.expires_at) {
+    return false;
+  }
+
+  const expiresAt = new Date(purchase.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) {
+    return false;
+  }
+
+  return now.getTime() > expiresAt.getTime();
+};
+
+export const resolveExpiredPendingPurchase = async (purchase: PurchaseRecord | null) => {
+  if (!purchase || !isPendingPurchaseExpired(purchase)) {
+    return {
+      purchase,
+      didExpire: false,
+      message: null as string | null,
+    };
+  }
+
+  const updatedPurchase = await markPurchaseFailed(purchase.id);
+  const latestPurchase = updatedPurchase ?? (await getPurchaseById(purchase.id));
+
+  if (latestPurchase?.payment_status === 'PAID') {
+    return {
+      purchase: latestPurchase,
+      didExpire: false,
+      message: null as string | null,
+    };
+  }
+
+  return {
+    purchase: latestPurchase ?? { ...purchase, payment_status: 'FAILED', updated_at: new Date().toISOString() },
+    didExpire: true,
+    message: EXPIRED_PENDING_PURCHASE_MESSAGE,
+  };
 };
 
 export const getLatestPaidPurchaseForUser = async (userId: string) => {
@@ -369,7 +429,14 @@ export const getLatestPendingPurchaseForUser = async (
     .maybeSingle();
 
   if (error) throw error;
-  return data as PurchaseRecord | null;
+
+  const resolvedPurchase = await resolveExpiredPendingPurchase(data as PurchaseRecord | null);
+
+  if (resolvedPurchase.purchase?.payment_status !== 'PENDING') {
+    return null;
+  }
+
+  return resolvedPurchase.purchase;
 };
 
 export const getPaymentOverview = async (userId: string) => {
@@ -399,7 +466,8 @@ export const getPaymentOverview = async (userId: string) => {
   if (latestResult.error) throw latestResult.error;
 
   const latestPaidPurchase = paidResult.data as PurchaseRecord | null;
-  const latestPurchase = latestResult.data as PurchaseRecord | null;
+  const latestPurchaseResult = await resolveExpiredPendingPurchase(latestResult.data as PurchaseRecord | null);
+  const latestPurchase = latestPurchaseResult.purchase;
 
   const entitledTier = latestPaidPurchase
     ? (parseNullableTier(latestPaidPurchase.unlocked_tier) ?? parseNullableTier(latestPaidPurchase.selected_tier))
@@ -415,6 +483,7 @@ export const getPaymentOverview = async (userId: string) => {
     latestPaymentStatus: (activePurchase?.payment_status ?? 'NOT_STARTED') as PaymentOverviewStatus,
     latestPurchaseId: activePurchase?.id ?? null,
     latestPaymentMethodType: activePurchase?.payment_method_type ?? null,
+    latestStatusMessage: !latestPaidPurchase ? latestPurchaseResult.message : null,
     creationPath: entitledTier ? getCreationPathForTier(entitledTier) : null,
   };
 };

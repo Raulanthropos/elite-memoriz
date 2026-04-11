@@ -11,6 +11,7 @@ export type PaymentOverview = {
   latestPaymentStatus: PaymentOverviewStatus;
   latestPurchaseId: number | null;
   latestPaymentMethodType: string | null;
+  latestStatusMessage: string | null;
   creationPath: string | null;
 };
 
@@ -28,6 +29,7 @@ export type PurchaseStatus = {
   paymentMethodType: string;
   isUnlocked: boolean;
   creationPath: string | null;
+  message?: string | null;
 };
 
 export type PaymentSession = {
@@ -105,6 +107,7 @@ export const fetchPaymentOverview = async (): Promise<PaymentOverview> => {
     ...payload,
     entitledTier: parseNullableTier(payload.entitledTier),
     latestSelectedTier: parseNullableTier(payload.latestSelectedTier),
+    latestStatusMessage: payload.latestStatusMessage ?? null,
   };
 };
 
@@ -173,6 +176,7 @@ export const fetchPurchaseStatus = async (purchaseId: number): Promise<PurchaseS
     ...payload,
     selectedTier: parseNullableTier(payload.selectedTier),
     unlockedTier: parseNullableTier(payload.unlockedTier),
+    message: payload.message ?? null,
   };
 };
 

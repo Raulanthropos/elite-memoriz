@@ -15,6 +15,7 @@ import {
   insertPendingPurchase,
   markPurchaseFailed,
   markPurchasePaid,
+  resolveExpiredPendingPurchase,
   verifyIrisHash,
   type PurchaseRecord,
 } from '../lib/payments';
@@ -257,14 +258,22 @@ router.post('/charge', async (req: AuthRequest, res: Response) => {
     if (purchase.user_id !== userId) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
-    if (purchase.payment_status !== 'PENDING') {
+
+    const resolvedPurchaseResult = await resolveExpiredPendingPurchase(purchase);
+    const resolvedPurchase = resolvedPurchaseResult.purchase;
+
+    if (!resolvedPurchase) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+
+    if (resolvedPurchase.payment_status !== 'PENDING') {
       return res.status(409).json({
-        message: `Purchase is already ${purchase.payment_status}`,
-        ...buildPurchaseResponse(purchase),
+        message: resolvedPurchaseResult.message ?? `Purchase is already ${resolvedPurchase.payment_status}`,
+        ...buildPurchaseResponse(resolvedPurchase),
       });
     }
 
-    const tier = parseTier(purchase.selected_tier);
+    const tier = parseTier(resolvedPurchase.selected_tier);
     if (!tier) {
       return res.status(400).json({ message: 'Invalid tier on purchase record' });
     }
@@ -277,27 +286,27 @@ router.post('/charge', async (req: AuthRequest, res: Response) => {
       quote.amount,
       description,
       userEmail,
-      { purchaseId: String(purchase.id), userId, tier },
+      { purchaseId: String(resolvedPurchase.id), userId, tier },
     );
 
     if (paymentResult.status === 'Captured') {
       await markPurchasePaid(
-        purchase.id,
+        resolvedPurchase.id,
         paymentResult.token,
         tier,
         userId,
         userEmail,
       );
 
-      const updated = await getPurchaseById(purchase.id);
+      const updated = await getPurchaseById(resolvedPurchase.id);
       return res.json({
         success: true,
         ...buildPurchaseResponse(updated!),
       });
     }
 
-    await markPurchaseFailed(purchase.id);
-    const failed = await getPurchaseById(purchase.id);
+    await markPurchaseFailed(resolvedPurchase.id);
+    const failed = await getPurchaseById(resolvedPurchase.id);
     res.status(402).json({
       success: false,
       message: 'Payment failed',
@@ -342,7 +351,17 @@ router.get('/purchase-status', async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    res.json(buildPurchaseResponse(purchase));
+    const resolvedPurchaseResult = await resolveExpiredPendingPurchase(purchase);
+    const resolvedPurchase = resolvedPurchaseResult.purchase;
+
+    if (!resolvedPurchase) {
+      return res.status(404).json({ message: 'Payment attempt not found' });
+    }
+
+    res.json({
+      ...buildPurchaseResponse(resolvedPurchase),
+      ...(resolvedPurchaseResult.message ? { message: resolvedPurchaseResult.message } : {}),
+    });
   } catch (error) {
     console.error('Error checking payment status:', error);
     res.status(500).json({ message: 'Failed to verify payment status' });
@@ -423,8 +442,21 @@ export const everyPayWebhookHandler = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    if (purchase.payment_status === 'PAID') {
-      return res.json({ received: true, status: 'already_paid' });
+    const resolvedPurchaseResult = await resolveExpiredPendingPurchase(purchase);
+    const resolvedPurchase = resolvedPurchaseResult.purchase;
+
+    if (!resolvedPurchase) {
+      console.error(`EveryPay webhook: purchase ${purchaseId} disappeared during processing`);
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+
+    if (resolvedPurchase.payment_status !== 'PENDING') {
+      return res.json({
+        received: true,
+        status: resolvedPurchase.payment_status === 'PAID'
+          ? 'already_paid'
+          : resolvedPurchase.payment_status.toLowerCase(),
+      });
     }
 
     const parsedTier = parseTier(tier);

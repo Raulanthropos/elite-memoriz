@@ -311,6 +311,9 @@ const PaymentPlaceholder = () => {
 
   const requestedTier = parseTier(searchParams.get('tier')) ?? 'BASIC';
   const pageCopy = copy[language];
+  const latestStatusMessage = paymentOverview?.latestPaymentStatus === 'FAILED'
+    ? paymentOverview.latestStatusMessage
+    : null;
 
   useEffect(() => {
     setStoredPublicLanguage(language);
@@ -542,6 +545,12 @@ const PaymentPlaceholder = () => {
             {error && (
               <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
                 {error}
+              </div>
+            )}
+
+            {!error && latestStatusMessage && (
+              <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+                {latestStatusMessage}
               </div>
             )}
 

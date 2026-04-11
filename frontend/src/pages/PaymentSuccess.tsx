@@ -135,6 +135,7 @@ const PaymentSuccess = () => {
 
         if (status.paymentStatus === 'FAILED' || status.paymentStatus === 'EXPIRED') {
           setVerificationState('failed');
+          setError(status.message ?? null);
           clearIrisPending();
           return;
         }
