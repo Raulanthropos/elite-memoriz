@@ -72,7 +72,7 @@ const Register = () => {
   const [language, setLanguage] = useState<PublicLanguage>(getStoredPublicLanguage);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const requestedRedirect = searchParams.get('redirect');
+  const requestedRedirect = searchParams.get('redirectTo') ?? searchParams.get('redirect');
   const redirectPath = sanitizeRedirectPath(requestedRedirect);
   const emailRedirectTo = getEmailRedirectUrl(requestedRedirect);
   const existingAccountRedirectPath = redirectPath.startsWith('/payment') ? '/dashboard' : redirectPath;

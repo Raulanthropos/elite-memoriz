@@ -195,14 +195,15 @@ const LandingPage = () => {
     if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const registerRedirect = encodeURIComponent('/create-event');
+  const redirectTo = `/create-event?tier=${encodeURIComponent(selectedTier)}`;
+  const encodedRedirectTo = encodeURIComponent(redirectTo);
 
   const continueToRegister = () => {
-    navigate(`/register?redirect=${registerRedirect}`);
+    navigate(`/register?redirectTo=${encodedRedirectTo}`);
   };
 
   const continueToLogin = () => {
-    navigate(`/login?redirect=${registerRedirect}`);
+    navigate(`/login?redirectTo=${encodedRedirectTo}`);
   };
 
   return (
