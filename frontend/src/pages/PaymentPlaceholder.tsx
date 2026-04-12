@@ -332,13 +332,6 @@ const PaymentPlaceholder = () => {
     }
   }, []);
 
-  // Load EveryPay JS (card-only dependency)
-  useEffect(() => {
-    loadEveryPayScript()
-      .then(() => setScriptLoaded(true))
-      .catch(() => setScriptError(true));
-  }, []);
-
   // Fetch payment overview
   useEffect(() => {
     let cancelled = false;
@@ -362,6 +355,14 @@ const PaymentPlaceholder = () => {
   const displayTier = paymentOverview?.entitledTier ?? pendingSelectedTier ?? requestedTier;
   const tierCopy = pageCopy.tiers[displayTier];
   const isPaid = Boolean(paymentOverview?.hasPaidTier && paymentOverview.entitledTier);
+
+  // Load EveryPay JS only when a new card payment is actually possible
+  useEffect(() => {
+    if (overviewLoading || isPaid) return;
+    loadEveryPayScript()
+      .then(() => setScriptLoaded(true))
+      .catch(() => setScriptError(true));
+  }, [overviewLoading, isPaid]);
   const hasBackendPendingPurchase = Boolean(
     !isPaid
     && paymentOverview?.latestPaymentStatus === 'PENDING'
