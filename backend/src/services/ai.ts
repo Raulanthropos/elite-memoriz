@@ -5,9 +5,6 @@ let _openai: OpenAI | null = null;
 
 function getOpenAIClient(): OpenAI {
   if (!_openai) {
-// #region agent log
-    fetch('http://127.0.0.1:7648/ingest/f1af423a-5dbc-47ac-b418-353d9ec9b372',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2329f0'},body:JSON.stringify({sessionId:'2329f0',location:'services/ai.ts:getOpenAIClient',message:'Lazily initializing OpenAI client',data:{hasKey:!!process.env.OPENAI_API_KEY},timestamp:Date.now(),hypothesisId:'FIX'})}).catch(()=>{});
-// #endregion
     _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return _openai;

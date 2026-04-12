@@ -484,8 +484,9 @@ const CreateEvent = () => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.eventName}</label>
+                <label htmlFor="event-title" className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.eventName}</label>
                 <input
+                  id="event-title"
                   type="text"
                   required
                   value={formData.title}
@@ -496,8 +497,9 @@ const CreateEvent = () => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.eventDate}</label>
+                <label htmlFor="event-date" className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.eventDate}</label>
                 <input
+                  id="event-date"
                   type="date"
                   required
                   value={formData.date}
@@ -530,7 +532,7 @@ const CreateEvent = () => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.coverImage}</label>
+                <label htmlFor="event-cover" className="mb-2 block text-sm font-medium text-gray-400">{pageCopy.coverImage}</label>
                 <div className="group relative aspect-video overflow-hidden rounded-xl border border-gray-700 bg-gray-800">
                   <img src={displayPreview} alt="Preview" className="h-full w-full object-cover transition-opacity duration-300" />
                   {isAuthenticated ? (
@@ -550,6 +552,7 @@ const CreateEvent = () => {
                     </div>
                   )}
                   <input
+                    id="event-cover"
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"

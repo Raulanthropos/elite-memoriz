@@ -8,15 +8,7 @@ import { hostRoutes } from './routes/host';
 import { paymentRoutes, everyPayWebhookHandler } from './routes/payments';
 import { deleteExpiredEvents, syncEventExpirations } from './services/eventCleanup';
 
-// #region agent log
-fetch('http://127.0.0.1:7648/ingest/f1af423a-5dbc-47ac-b418-353d9ec9b372',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2329f0'},body:JSON.stringify({sessionId:'2329f0',location:'index.ts:before-dotenv',message:'About to call dotenv.config()',data:{hasOpenAIKey:!!process.env.OPENAI_API_KEY},timestamp:Date.now(),hypothesisId:'H-C'})}).catch(()=>{});
-// #endregion
-
 dotenv.config();
-
-// #region agent log
-fetch('http://127.0.0.1:7648/ingest/f1af423a-5dbc-47ac-b418-353d9ec9b372',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2329f0'},body:JSON.stringify({sessionId:'2329f0',location:'index.ts:after-dotenv',message:'dotenv.config() completed',data:{hasOpenAIKey:!!process.env.OPENAI_API_KEY},timestamp:Date.now(),hypothesisId:'H-C'})}).catch(()=>{});
-// #endregion
 
 const app = express();
 
@@ -74,9 +66,6 @@ const runExpiredEventCleanup = async (reason: 'startup' | 'scheduled') => {
 };
 
 app.listen(PORT, '0.0.0.0', () => {
-// #region agent log
-  fetch('http://127.0.0.1:7648/ingest/f1af423a-5dbc-47ac-b418-353d9ec9b372',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2329f0'},body:JSON.stringify({sessionId:'2329f0',location:'index.ts:app-listen',message:'Server started successfully',data:{port:PORT},timestamp:Date.now(),hypothesisId:'H-B'})}).catch(()=>{});
-// #endregion
   console.log(`Server running on port ${PORT}`);
   console.log('[EVENT_CLEANUP] scheduler configured', {
     schedule: EVENT_CLEANUP_SCHEDULE,

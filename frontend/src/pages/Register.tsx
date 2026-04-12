@@ -209,8 +209,9 @@ const Register = () => {
           <form className="space-y-6" onSubmit={handleRegister}>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.email}</label>
+                <label htmlFor="register-email" className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.email}</label>
                 <input
+                  id="register-email"
                   type="email"
                   autoComplete="email"
                   required
@@ -223,8 +224,9 @@ const Register = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.password}</label>
+                  <label htmlFor="register-password" className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.password}</label>
                   <input
+                    id="register-password"
                     type="password"
                     autoComplete="new-password"
                     required
@@ -251,8 +253,9 @@ const Register = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.confirm}</label>
+                  <label htmlFor="register-confirm" className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.confirm}</label>
                   <input
+                    id="register-confirm"
                     type="password"
                     autoComplete="new-password"
                     required
