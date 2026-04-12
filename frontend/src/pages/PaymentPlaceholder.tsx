@@ -306,6 +306,7 @@ const PaymentPlaceholder = () => {
   const [quoteLoading, setQuoteLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [scriptError, setScriptError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethodTab, setPaymentMethodTab] = useState<PaymentMethodTab>('card');
 
@@ -331,11 +332,11 @@ const PaymentPlaceholder = () => {
     }
   }, []);
 
-  // Load EveryPay JS
+  // Load EveryPay JS (card-only dependency)
   useEffect(() => {
     loadEveryPayScript()
       .then(() => setScriptLoaded(true))
-      .catch(() => setError('Failed to load payment library'));
+      .catch(() => setScriptError(true));
   }, []);
 
   // Fetch payment overview
@@ -522,7 +523,8 @@ const PaymentPlaceholder = () => {
 
   // ---- Rendering ----
 
-  const showPaymentForm = !isPaid && !overviewLoading && scriptLoaded && !quoteLoading && paymentQuote;
+  const showPaymentForm = !isPaid && !overviewLoading && !quoteLoading && paymentQuote;
+  const cardScriptReady = scriptLoaded;
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6 text-white sm:px-6">
@@ -670,7 +672,18 @@ const PaymentPlaceholder = () => {
                     <p className="text-sm font-semibold text-white">{pageCopy.cardTitle}</p>
                     <p className="mt-2 text-sm leading-6 text-gray-400">{pageCopy.cardBody}</p>
 
-                    {!paymentSession ? (
+                    {scriptError ? (
+                      <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
+                        {language === 'el'
+                          ? 'Η φόρτωση της βιβλιοθήκης κάρτας απέτυχε. Δοκίμασε να κάνεις ανανέωση ή χρησιμοποίησε IRIS.'
+                          : 'Failed to load the card payment library. Try refreshing the page or use IRIS instead.'}
+                      </div>
+                    ) : !cardScriptReady ? (
+                      <div className="mt-5 flex items-center gap-3 text-sm text-gray-400">
+                        <Loader2 size={18} className="animate-spin" />
+                        {pageCopy.loadingForm}
+                      </div>
+                    ) : !paymentSession ? (
                       <>
                         <button
                           type="button"
