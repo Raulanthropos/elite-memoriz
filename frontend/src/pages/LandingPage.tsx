@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Camera, CheckCircle2, CreditCard, Globe, Image, Lock, QrCode, Sparkles, UserRoundPlus, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  CreditCard,
+  Globe,
+  Image,
+  Lock,
+  QrCode,
+  Sparkles,
+  UserRoundPlus,
+  Users,
+} from 'lucide-react';
 import { TIERS, type Tier } from '../lib/tiers';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
@@ -8,10 +20,15 @@ type Language = 'el' | 'en';
 
 const LANGUAGE_STORAGE_KEY = 'elite-memoriz-language';
 
-const tierMeta: Record<Tier, { price: string; accent: string }> = {
-  BASIC: { price: '€29', accent: 'border-stone-300 bg-white' },
-  PREMIUM: { price: '€79', accent: 'border-emerald-500 bg-emerald-50' },
-  LUXURY: { price: '€129', accent: 'border-amber-400 bg-amber-50' },
+const tierMeta: Record<Tier, { price: string }> = {
+  BASIC: { price: '€29' },
+  PREMIUM: { price: '€79' },
+  LUXURY: { price: '€129' },
+};
+
+const DOT_BG: React.CSSProperties = {
+  backgroundImage: 'radial-gradient(circle, #29252480 1px, transparent 1px)',
+  backgroundSize: '28px 28px',
 };
 
 const copy = {
@@ -21,8 +38,7 @@ const copy = {
       badge: 'Χωρίς app για τους καλεσμένους',
       title: 'Το ιδιωτικό album που γεμίζει',
       accent: 'ζωντανά από το event',
-      body:
-        'Για γάμους, βαφτίσεις, parties και εταιρικά events. Ο host δίνει ένα QR και συγκεντρώνει όλο το υλικό σε έναν καθαρό χώρο.',
+      body: 'Για γάμους, βαφτίσεις, parties και εταιρικά events. Ο host δίνει ένα QR και συγκεντρώνει όλο το υλικό σε έναν καθαρό χώρο.',
       primary: 'Δημιούργησε host account',
       secondary: 'Δες τα πακέτα',
       selected: 'Προεπισκόπηση πακέτου',
@@ -99,8 +115,7 @@ const copy = {
       badge: 'No app required for guests',
       title: 'The private album that fills',
       accent: 'live during the event',
-      body:
-        'Built for weddings, baptisms, parties, and corporate events. The host shares one QR and gathers every memory in one clean space.',
+      body: 'Built for weddings, baptisms, parties, and corporate events. The host shares one QR and gathers every memory in one clean space.',
       primary: 'Create host account',
       secondary: 'View plans',
       selected: 'Plan preview',
@@ -191,220 +206,294 @@ const LandingPage = () => {
   const selectedTierCopy = pageCopy.tiers[selectedTier];
 
   const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const redirectTo = `/create-event?tier=${encodeURIComponent(selectedTier)}`;
   const encodedRedirectTo = encodeURIComponent(redirectTo);
 
-  const continueToRegister = () => {
-    navigate(`/register?redirectTo=${encodedRedirectTo}`);
-  };
-
-  const continueToLogin = () => {
-    navigate(`/login?redirectTo=${encodedRedirectTo}`);
-  };
+  const continueToRegister = () => navigate(`/register?redirectTo=${encodedRedirectTo}`);
+  const continueToLogin = () => navigate(`/login?redirectTo=${encodedRedirectTo}`);
 
   return (
-    <div className="min-h-screen bg-[#f7f2e8] text-stone-900 selection:bg-amber-200">
-      <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[#f7f2e8]/90 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-start justify-between sm:items-center">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-900/70">Elite Memoriz</p>
-              <p className="text-sm font-semibold leading-tight text-stone-900 sm:text-lg">Private event memories</p>
+    <div className="min-h-screen bg-[#f8f3eb] font-sans text-stone-900 selection:bg-amber-200">
+
+      {/* ── HEADER ───────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 border-b border-stone-200/60 bg-[#f8f3eb]/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between gap-4">
+
+            {/* Brand wordmark */}
+            <div className="shrink-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-emerald-800/70">
+                Elite Memoriz
+              </p>
+              <p className="font-serif text-lg italic text-stone-600">Private event memories</p>
             </div>
 
-            <div className="hidden items-center gap-8 text-sm font-medium text-stone-600 lg:flex">
-              <button type="button" onClick={() => scrollToSection('how-it-works')} className="hover:text-stone-950">
+            {/* Centre nav — desktop only */}
+            <nav className="hidden items-center gap-8 lg:flex">
+              <button
+                type="button"
+                onClick={() => scrollToSection('how-it-works')}
+                className="text-sm font-semibold uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900"
+              >
                 {pageCopy.nav.how}
               </button>
-              <button type="button" onClick={() => scrollToSection('pricing')} className="hover:text-stone-950">
+              <button
+                type="button"
+                onClick={() => scrollToSection('pricing')}
+                className="text-sm font-semibold uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900"
+              >
                 {pageCopy.nav.plans}
               </button>
-            </div>
+            </nav>
 
-            <div className="flex items-center rounded-full border border-stone-300 bg-white p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setLanguage('el')}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${language === 'el' ? 'bg-stone-950 text-white' : 'text-stone-600'}`}
-              >
-                EL
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage('en')}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${language === 'en' ? 'bg-stone-950 text-white' : 'text-stone-600'}`}
-              >
-                EN
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 flex justify-center sm:hidden">
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={continueToRegister}
-                className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
-              >
-                {pageCopy.nav.register}
-              </button>
-              <button
-                type="button"
-                onClick={continueToLogin}
-                className="inline-flex min-w-[8.5rem] justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
-              >
-                {pageCopy.nav.login}
-              </button>
-            </div>
-          </div>
-
-          <div className="hidden justify-end sm:flex sm:pt-0">
+            {/* Right cluster */}
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={continueToRegister}
-                className="inline-flex justify-center whitespace-nowrap rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
-              >
-                {pageCopy.nav.register}
-              </button>
-              <button
-                type="button"
-                onClick={continueToLogin}
-                className="inline-flex justify-center whitespace-nowrap rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
-              >
-                {pageCopy.nav.login}
-              </button>
+              {/* Language pill */}
+              <div className="flex items-center rounded-full border border-stone-200 bg-white p-0.5 shadow-sm">
+                {(['el', 'en'] as Language[]).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setLanguage(lang)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      language === lang
+                        ? 'bg-stone-900 text-white'
+                        : 'text-stone-500 hover:text-stone-700'
+                    }`}
+                  >
+                    {lang.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Auth buttons — desktop */}
+              <div className="hidden items-center gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={continueToLogin}
+                  className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-50"
+                >
+                  {pageCopy.nav.login}
+                </button>
+                <button
+                  type="button"
+                  onClick={continueToRegister}
+                  className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-stone-700"
+                >
+                  {pageCopy.nav.register}
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Auth buttons — mobile row */}
+          <div className="flex justify-center gap-2 pb-3 sm:hidden">
+            <button
+              type="button"
+              onClick={continueToRegister}
+              className="rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white"
+            >
+              {pageCopy.nav.register}
+            </button>
+            <button
+              type="button"
+              onClick={continueToLogin}
+              className="rounded-full border border-stone-200 bg-white px-5 py-2.5 text-sm font-semibold text-stone-700"
+            >
+              {pageCopy.nav.login}
+            </button>
           </div>
         </div>
       </header>
 
       <main>
-        <section className="mx-auto grid max-w-7xl gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pt-24">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 shadow-sm">
-              <Globe size={16} />
-              {pageCopy.hero.badge}
-            </div>
-            <h1 className="mt-6 text-5xl font-semibold leading-tight tracking-tight text-stone-950 md:text-7xl">
-              {pageCopy.hero.title} <span className="text-emerald-900">{pageCopy.hero.accent}</span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">{pageCopy.hero.body}</p>
 
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-              <button
-                type="button"
-                onClick={continueToRegister}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-stone-950/15"
-              >
-                {pageCopy.hero.primary}
-                <ArrowRight size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('pricing')}
-                className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-7 py-4 text-base font-semibold text-stone-800"
-              >
-                {pageCopy.hero.secondary}
-              </button>
-            </div>
+        {/* ── HERO ─────────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden bg-[#f8f3eb] pb-24 pt-20 lg:pb-36 lg:pt-28">
+          {/* Dot grid texture */}
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={DOT_BG} />
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
-              {pageCopy.promises.map(([title, description], index) => {
-                const Icon = [Sparkles, Camera, Image][index];
-                return (
-                  <div key={title} className="rounded-3xl border border-stone-200 bg-white p-5 shadow-lg shadow-stone-200/40">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-950 text-white">
-                      <Icon size={20} />
-                    </div>
-                    <h2 className="mt-4 text-base font-semibold text-stone-950">{title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid items-start gap-16 lg:grid-cols-[1.15fr_0.85fr]">
 
-          <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-[0_28px_80px_rgba(41,37,36,0.12)]">
-            <div className="rounded-[1.75rem] bg-[#17332c] p-6 text-white">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-100/80">
-                    {pageCopy.hero.selected}
-                  </p>
-                  <h2 className="mt-3 text-3xl font-semibold">
-                    {selectedTierCopy.name} • {tierMeta[selectedTier].price}
-                  </h2>
-                </div>
-                <div className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-emerald-50">
-                  Elite flow
-                </div>
-              </div>
-
-              <div className="mt-8 grid gap-4 sm:grid-cols-[1fr_0.95fr]">
-                <div className="rounded-[1.5rem] bg-white/10 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#17332c]">
-                      <QrCode size={24} />
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">{pageCopy.hero.preview}</p>
-                      <p className="mt-1 text-sm text-emerald-50">{selectedTierCopy.audience}</p>
-                    </div>
-                  </div>
-
-                  <ul className="mt-5 space-y-3">
-                    {pageCopy.hero.bullets.map((bullet) => (
-                      <li key={bullet} className="flex items-center gap-3 text-sm text-emerald-50">
-                        <CheckCircle2 size={16} className="shrink-0 text-amber-300" />
-                        <span>{bullet}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {/* ── Left ── */}
+              <div>
+                {/* Eyebrow */}
+                <div className="flex items-center gap-3">
+                  <span className="h-px w-10 bg-emerald-700/40" />
+                  <span className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.25em] text-emerald-800">
+                    <Globe size={13} />
+                    {pageCopy.hero.badge}
+                  </span>
                 </div>
 
-                <div className="rounded-[1.5rem] bg-[#f7f2e8] p-5 text-stone-900">
-                  <p className="text-sm font-semibold text-stone-500">{pageCopy.current}</p>
-                  <p className="mt-2 text-2xl font-semibold text-stone-950">{selectedTierCopy.name}</p>
-                  <ul className="mt-4 space-y-3">
-                    {selectedTierCopy.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-3 text-sm text-stone-700">
-                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-700" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* Headline */}
+                <h1 className="mt-6 font-serif text-[3.5rem] font-semibold leading-[1.06] tracking-tight text-stone-950 md:text-7xl xl:text-[5.25rem]">
+                  {pageCopy.hero.title}{' '}
+                  <span className="italic text-emerald-900">{pageCopy.hero.accent}</span>
+                </h1>
+
+                <p className="mt-7 max-w-lg text-lg leading-8 text-stone-600">
+                  {pageCopy.hero.body}
+                </p>
+
+                {/* CTAs */}
+                <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
                     onClick={continueToRegister}
-                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white"
+                    className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-stone-950 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-stone-950/20 transition-all hover:bg-stone-800 hover:shadow-xl hover:shadow-stone-950/25"
                   >
-                    {pageCopy.continueWith}
-                    <ArrowRight size={16} />
+                    {pageCopy.hero.primary}
+                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollToSection('pricing')}
+                    className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white/70 px-8 py-4 text-base font-semibold text-stone-800 backdrop-blur-sm transition-colors hover:bg-white"
+                  >
+                    {pageCopy.hero.secondary}
                   </button>
                 </div>
+
+                {/* Promise mini-cards */}
+                <div className="mt-12 grid gap-3 sm:grid-cols-3">
+                  {pageCopy.promises.map(([title, description], index) => {
+                    const Icon = [Sparkles, Camera, Image][index];
+                    return (
+                      <div
+                        key={title}
+                        className="rounded-2xl border border-stone-200/80 bg-white/60 p-5 shadow-sm backdrop-blur-sm"
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-900 text-emerald-50">
+                          <Icon size={17} />
+                        </div>
+                        <p className="mt-3 text-base font-semibold text-stone-900">{title}</p>
+                        <p className="mt-1 text-sm leading-6 text-stone-500">{description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* ── Right — interactive plan preview card ── */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl shadow-stone-950/10">
+
+                {/* Card header row */}
+                <div className="mb-5 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-stone-400">
+                    {pageCopy.hero.selected}
+                  </p>
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5">
+                    <QrCode size={13} className="text-emerald-700" />
+                    <span className="text-xs font-semibold text-emerald-800">Elite flow</span>
+                  </div>
+                </div>
+
+                {/* Tier tabs */}
+                <div className="flex gap-1 rounded-2xl bg-stone-100 p-1">
+                  {TIERS.map((tier) => (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => setSelectedTier(tier)}
+                      className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all ${
+                        selectedTier === tier
+                          ? 'bg-white text-stone-900 shadow-sm'
+                          : 'text-stone-500 hover:text-stone-700'
+                      }`}
+                    >
+                      {pageCopy.tiers[tier].name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Selected tier detail */}
+                <div className="mt-5 rounded-2xl bg-[#17332c] p-6 text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="font-serif text-3xl font-semibold">{selectedTierCopy.name}</h2>
+                      <p className="mt-1 text-sm leading-6 text-emerald-200/70">{selectedTierCopy.audience}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-serif text-4xl font-semibold leading-none">
+                        {tierMeta[selectedTier].price}
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-200/60">/ event</p>
+                    </div>
+                  </div>
+
+                  <ul className="mt-5 space-y-2.5">
+                    {selectedTierCopy.features.map((feature) => (
+                      <li key={feature} className="flex items-center gap-2.5 text-base text-emerald-50">
+                        <CheckCircle2 size={16} className="shrink-0 text-amber-300" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Primary CTA */}
+                <button
+                  type="button"
+                  onClick={continueToRegister}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-base font-semibold text-white transition-colors hover:bg-stone-800"
+                >
+                  {pageCopy.continueWith}
+                  <ArrowRight size={16} />
+                </button>
+
+                {/* Quick-start bullets */}
+                <div className="mt-4 rounded-2xl bg-stone-50 px-5 py-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-stone-400">
+                    {pageCopy.hero.preview}
+                  </p>
+                  <ul className="space-y-2.5">
+                    {pageCopy.hero.bullets.map((bullet) => (
+                      <li key={bullet} className="flex items-center gap-2.5 text-sm text-stone-600">
+                        <CheckCircle2 size={14} className="shrink-0 text-emerald-700" />
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
 
-        <section id="how-it-works" className="border-y border-stone-200 bg-white py-24">
+        {/* ── HOW IT WORKS ─────────────────────────────────────────── */}
+        <section id="how-it-works" className="bg-[#17332c] py-28 text-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.stepsTitle}</h2>
-            <div className="mt-12 grid gap-6 lg:grid-cols-4">
+
+            <div className="mb-16 flex items-center gap-4">
+              <span className="h-px w-12 bg-amber-400/50" />
+              <h2 className="font-serif text-4xl font-semibold italic text-white md:text-5xl">
+                {pageCopy.stepsTitle}
+              </h2>
+            </div>
+
+            <div className="grid lg:grid-cols-4">
               {pageCopy.steps.map(([title, description], index) => {
                 const Icon = [UserRoundPlus, Sparkles, CheckCircle2, CreditCard][index];
                 return (
-                  <div key={title} className="rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-8 shadow-lg shadow-stone-200/40">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-950 text-white">
-                      <Icon size={24} />
+                  <div
+                    key={title}
+                    className="group border-t border-white/10 p-8 lg:border-l lg:border-t-0 lg:first:border-l-0"
+                  >
+                    <p className="font-serif text-7xl font-semibold leading-none text-white/10 transition-colors group-hover:text-white/20">
+                      {String(index + 1).padStart(2, '0')}
+                    </p>
+                    <div className="mt-5 flex h-10 w-10 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-amber-300">
+                      <Icon size={17} />
                     </div>
-                    <h3 className="mt-6 text-2xl font-semibold text-stone-950">{title}</h3>
-                    <p className="mt-3 text-base leading-7 text-stone-600">{description}</p>
+                    <h3 className="mt-5 font-serif text-xl font-semibold leading-snug text-white">{title}</h3>
+                    <p className="mt-3 text-base leading-7 text-emerald-100/55">{description}</p>
                   </div>
                 );
               })}
@@ -412,84 +501,145 @@ const LandingPage = () => {
           </div>
         </section>
 
-        <section className="bg-[#efe5d3] py-24">
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8">
-            <div className="rounded-[2rem] bg-stone-950 p-8 text-white shadow-2xl shadow-stone-950/15">
-              <h2 className="text-4xl font-semibold tracking-tight">{pageCopy.experienceTitle}</h2>
-              <p className="mt-4 text-base leading-7 text-stone-300">{pageCopy.experienceBody}</p>
-              <div className="mt-8 space-y-4">
-                {pageCopy.experienceBullets.map((bullet) => (
-                  <div key={bullet} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 size={18} className="mt-1 shrink-0 text-amber-300" />
-                      <p className="text-sm leading-6 text-stone-200">{bullet}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              {pageCopy.experienceCards.map(([title, description], index) => {
-                const CardIcon = [Lock, Users, Image, Sparkles][index] as typeof Lock;
-                return (
-                  <div key={title} className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-lg shadow-stone-200/40">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-900">
-                      <CardIcon size={20} />
-                    </div>
-                    <h3 className="mt-5 text-xl font-semibold text-stone-900">{title}</h3>
-                    <p className="mt-3 text-sm leading-6 text-stone-600">{description}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section id="pricing" className="bg-white py-24">
+        {/* ── EXPERIENCE ───────────────────────────────────────────── */}
+        <section className="bg-[#ede3cf] py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl">
-              <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.pricingTitle}</h2>
-              <p className="mt-4 text-lg leading-8 text-stone-600">{pageCopy.pricingBody}</p>
+            <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+
+              {/* Left — dark statement card */}
+              <div className="rounded-3xl bg-stone-950 p-10 text-white shadow-2xl">
+                <div className="mb-3 flex items-center gap-3">
+                  <span className="h-px w-8 bg-amber-400/60" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-400/80">
+                    Experience
+                  </span>
+                </div>
+                <h2 className="font-serif text-4xl font-semibold leading-tight text-white">
+                  {pageCopy.experienceTitle}
+                </h2>
+                <p className="mt-5 text-base leading-7 text-stone-400">{pageCopy.experienceBody}</p>
+                <div className="mt-8 space-y-3">
+                  {pageCopy.experienceBullets.map((bullet) => (
+                    <div
+                      key={bullet}
+                      className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-5 py-4"
+                    >
+                      <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-amber-400" />
+                      <p className="text-base leading-7 text-stone-300">{bullet}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right — 2 × 2 feature cards */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {pageCopy.experienceCards.map(([title, description], index) => {
+                  const CardIcon = [Lock, Users, Image, Sparkles][index] as typeof Lock;
+                  return (
+                    <div
+                      key={title}
+                      className="rounded-2xl border border-stone-200/60 bg-white p-7 shadow-md shadow-stone-200/30"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-900/10 text-emerald-900">
+                        <CardIcon size={19} />
+                      </div>
+                      <h3 className="mt-5 font-serif text-xl font-semibold text-stone-900">{title}</h3>
+                      <p className="mt-2 text-base leading-7 text-stone-500">{description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* ── PRICING ──────────────────────────────────────────────── */}
+        <section id="pricing" className="bg-[#fdfaf6] py-28">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+
+            {/* Section header */}
+            <div className="max-w-2xl">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="h-px w-10 bg-stone-400/60" />
+                <span className="text-xs font-semibold uppercase tracking-[0.35em] text-stone-400">
+                  Plans
+                </span>
+              </div>
+              <h2 className="font-serif text-4xl font-semibold text-stone-950 md:text-5xl">
+                {pageCopy.pricingTitle}
+              </h2>
+              <p className="mt-4 text-lg leading-8 text-stone-500">{pageCopy.pricingBody}</p>
             </div>
 
-            <div className="mt-14 grid gap-6 xl:grid-cols-3">
+            {/* Cards */}
+            <div className="mt-14 grid gap-5 xl:grid-cols-3">
               {TIERS.map((tier) => {
                 const tierCopy = pageCopy.tiers[tier];
                 const isSelected = selectedTier === tier;
+                const isPremium = tier === 'PREMIUM';
+
                 return (
                   <article
                     key={tier}
                     onClick={() => setSelectedTier(tier)}
-                    className={`cursor-pointer rounded-[2rem] border p-8 shadow-lg transition-all ${
-                      isSelected ? 'border-stone-950 bg-stone-950 text-white shadow-stone-950/15' : `${tierMeta[tier].accent} text-stone-900 shadow-stone-200/40`
+                    className={`relative cursor-pointer rounded-3xl border p-8 shadow-lg transition-all duration-200 ${
+                      isSelected
+                        ? 'border-stone-950 bg-stone-950 text-white shadow-stone-950/20'
+                        : 'border-stone-200 bg-white text-stone-900 shadow-stone-100/50 hover:border-stone-300 hover:shadow-xl hover:shadow-stone-100/80'
                     }`}
                   >
-                    <h3 className="text-3xl font-semibold">{tierCopy.name}</h3>
-                    <p className={`mt-2 text-sm ${isSelected ? 'text-stone-300' : 'text-stone-600'}`}>{tierCopy.audience}</p>
-                    <div className="mt-8 flex items-end gap-2">
-                      <span className="text-5xl font-semibold">{tierMeta[tier].price}</span>
-                      <span className={`pb-2 text-sm ${isSelected ? 'text-stone-300' : 'text-stone-500'}`}>/ event</span>
-                    </div>
-                    <p className={`mt-4 text-sm leading-6 ${isSelected ? 'text-stone-300' : 'text-stone-600'}`}>{tierCopy.description}</p>
+                    {isPremium && (
+                      <span
+                        className={`absolute -top-3 left-8 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
+                          isSelected
+                            ? 'bg-amber-400 text-stone-900'
+                            : 'bg-emerald-800 text-white'
+                        }`}
+                      >
+                        Popular
+                      </span>
+                    )}
 
-                    <ul className="mt-8 space-y-4">
+                    <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${isSelected ? 'text-stone-500' : 'text-stone-400'}`}>
+                      {tierCopy.audience}
+                    </p>
+                    <h3 className="mt-2 font-serif text-3xl font-semibold">{tierCopy.name}</h3>
+
+                    <div className="mt-6 flex items-end gap-1.5">
+                      <span className="font-serif text-5xl font-semibold leading-none">
+                        {tierMeta[tier].price}
+                      </span>
+                      <span className={`mb-1 text-sm ${isSelected ? 'text-stone-500' : 'text-stone-400'}`}>
+                        / event
+                      </span>
+                    </div>
+
+                    <p className={`mt-4 text-base leading-7 ${isSelected ? 'text-stone-400' : 'text-stone-500'}`}>
+                      {tierCopy.description}
+                    </p>
+
+                    <div className={`my-6 h-px ${isSelected ? 'bg-white/10' : 'bg-stone-100'}`} />
+
+                    <ul className="space-y-3">
                       {tierCopy.features.map((feature) => (
-                        <li key={feature} className="flex items-center gap-3 text-sm">
-                          <CheckCircle2 size={18} className={isSelected ? 'shrink-0 text-amber-300' : 'shrink-0 text-emerald-700'} />
-                          <span className={isSelected ? 'text-stone-100' : 'text-stone-700'}>{feature}</span>
+                        <li key={feature} className="flex items-center gap-3 text-base">
+                          <CheckCircle2
+                            size={16}
+                            className={isSelected ? 'shrink-0 text-amber-400' : 'shrink-0 text-emerald-700'}
+                          />
+                          <span className={isSelected ? 'text-stone-200' : 'text-stone-700'}>{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     <button
                       type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedTier(tier);
-                      }}
-                      className={`mt-10 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold ${
-                        isSelected ? 'bg-white text-stone-950' : 'bg-stone-950 text-white'
+                      onClick={(e) => { e.stopPropagation(); setSelectedTier(tier); }}
+                      className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-base font-semibold transition-colors ${
+                        isSelected
+                          ? 'bg-white text-stone-950 hover:bg-stone-100'
+                          : 'bg-stone-950 text-white hover:bg-stone-800'
                       }`}
                     >
                       {tierCopy.cta}
@@ -500,71 +650,115 @@ const LandingPage = () => {
               })}
             </div>
 
-            <div className="mt-10 rounded-[2rem] border border-stone-200 bg-[#f7f2e8] p-6 shadow-sm">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.25em] text-stone-500">{pageCopy.current}</p>
-                  <h3 className="mt-2 text-2xl font-semibold text-stone-950">
-                    {selectedTierCopy.name} • {tierMeta[selectedTier].price}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={continueToRegister}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-6 py-3.5 text-sm font-semibold text-white"
-                >
-                  {pageCopy.continueWith}
-                  <ArrowRight size={16} />
-                </button>
+            {/* Selected plan summary bar */}
+            <div className="mt-8 flex flex-col gap-5 rounded-3xl border border-stone-200 bg-white p-7 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-stone-400">
+                  {pageCopy.current}
+                </p>
+                <h3 className="mt-2 font-serif text-2xl font-semibold text-stone-950">
+                  {selectedTierCopy.name} — {tierMeta[selectedTier].price}
+                </h3>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="border-y border-stone-200 bg-[#17332c] py-24 text-white">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">{pageCopy.faqTitle}</h2>
-            <div className="mt-12 grid gap-6 lg:grid-cols-3">
-              {pageCopy.faq.map(([question, answer]) => (
-                <article key={question} className="rounded-[1.75rem] border border-white/10 bg-white/5 p-6">
-                  <h3 className="text-xl font-semibold text-white">{question}</h3>
-                  <p className="mt-3 text-sm leading-7 text-stone-300">{answer}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-white py-24">
-          <div className="mx-auto max-w-5xl rounded-[2.5rem] bg-[#efe5d3] px-6 py-12 text-center shadow-xl shadow-stone-200/50 sm:px-12">
-            <h2 className="text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">{pageCopy.finalTitle}</h2>
-            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-stone-700">{pageCopy.finalBody}</p>
-            <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
               <button
                 type="button"
                 onClick={continueToRegister}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-7 py-4 text-base font-semibold text-white"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-950 px-7 py-4 text-base font-semibold text-white transition-colors hover:bg-stone-800"
               >
                 {pageCopy.continueWith}
-                <ArrowRight size={18} />
+                <ArrowRight size={16} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ── FAQ ──────────────────────────────────────────────────── */}
+        <section className="bg-stone-950 py-28 text-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+
+            <div className="mb-14 flex items-center gap-4">
+              <span className="h-px w-12 bg-amber-400/50" />
+              <h2 className="font-serif text-4xl font-semibold italic text-white md:text-5xl">
+                {pageCopy.faqTitle}
+              </h2>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {pageCopy.faq.map(([question, answer]) => (
+                <article
+                  key={question}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-8"
+                >
+                  <h3 className="font-serif text-xl font-semibold text-white">{question}</h3>
+                  <p className="mt-4 text-base leading-7 text-stone-400">{answer}</p>
+                </article>
+              ))}
+            </div>
+
+          </div>
+        </section>
+
+        {/* ── FINAL CTA ────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden bg-[#f8f3eb] py-36">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={DOT_BG} />
+          <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+
+            <div className="mb-8 flex items-center justify-center gap-4">
+              <span className="h-px w-16 bg-stone-400/50" />
+              <span className="text-xs font-semibold uppercase tracking-[0.42em] text-stone-400">
+                Elite Memoriz
+              </span>
+              <span className="h-px w-16 bg-stone-400/50" />
+            </div>
+
+            <h2 className="font-serif text-5xl font-semibold leading-tight text-stone-950 md:text-6xl">
+              {pageCopy.finalTitle}
+            </h2>
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-stone-600">
+              {pageCopy.finalBody}
+            </p>
+
+            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={continueToRegister}
+                className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-stone-950 px-9 py-4 text-lg font-semibold text-white shadow-xl shadow-stone-950/20 transition-all hover:bg-stone-800"
+              >
+                {pageCopy.continueWith}
+                <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
               </button>
               <button
                 type="button"
                 onClick={continueToLogin}
-                className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-7 py-4 text-base font-semibold text-stone-800"
+                className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white/70 px-9 py-4 text-lg font-semibold text-stone-800 backdrop-blur-sm transition-colors hover:bg-white"
               >
                 {pageCopy.nav.login}
               </button>
             </div>
+
           </div>
         </section>
+
       </main>
 
-      <footer className="bg-stone-950 py-8 text-center text-sm text-stone-400">
-        <p>
-          &copy; {new Date().getFullYear()} Elite Memoriz. {pageCopy.footer}
-        </p>
+      {/* ── FOOTER ───────────────────────────────────────────────── */}
+      <footer className="border-t border-white/5 bg-[#0c1a17] py-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-stone-500">
+                Elite Memoriz
+              </p>
+              <p className="font-serif text-lg italic text-stone-600">Private event memories</p>
+            </div>
+            <p className="text-sm text-stone-600">
+              &copy; {new Date().getFullYear()} Elite Memoriz. {pageCopy.footer}
+            </p>
+          </div>
+        </div>
       </footer>
+
     </div>
   );
 };
