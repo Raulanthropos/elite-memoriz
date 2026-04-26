@@ -355,6 +355,15 @@ const isPendingPurchaseExpired = (purchase: PurchaseRecord, now = new Date()) =>
     return false;
   }
 
+  // IRIS bank transfers are confirmed asynchronously by EveryPay's webhook,
+  // potentially well after our 5-minute UI staleness window. Auto-failing
+  // them from a polling read path would race the webhook and silently drop
+  // a successful payment, so we never expire IRIS purchases here — only the
+  // webhook is authoritative for that flow.
+  if (purchase.payment_method_type === 'iris') {
+    return false;
+  }
+
   const expiresAt = new Date(purchase.expires_at);
   if (Number.isNaN(expiresAt.getTime())) {
     return false;

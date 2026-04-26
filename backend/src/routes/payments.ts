@@ -442,20 +442,17 @@ export const everyPayWebhookHandler = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    const resolvedPurchaseResult = await resolveExpiredPendingPurchase(purchase);
-    const resolvedPurchase = resolvedPurchaseResult.purchase;
-
-    if (!resolvedPurchase) {
-      console.error(`EveryPay webhook: purchase ${purchaseId} disappeared during processing`);
-      return res.status(404).json({ message: 'Purchase not found' });
-    }
-
-    if (resolvedPurchase.payment_status !== 'PENDING') {
+    // Do NOT apply the pending-purchase TTL here. IRIS bank transfers can be
+    // confirmed by EveryPay well after the UI-side staleness window, and the
+    // webhook is the authoritative signal that the payment actually went
+    // through. Auto-failing a still-PENDING row at this point would silently
+    // discard a successful payment.
+    if (purchase.payment_status !== 'PENDING') {
       return res.json({
         received: true,
-        status: resolvedPurchase.payment_status === 'PAID'
+        status: purchase.payment_status === 'PAID'
           ? 'already_paid'
-          : resolvedPurchase.payment_status.toLowerCase(),
+          : purchase.payment_status.toLowerCase(),
       });
     }
 
