@@ -195,6 +195,7 @@ const LandingPage = () => {
     return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'el';
   });
   const [selectedTier, setSelectedTier] = useState<Tier>('PREMIUM');
+  const [hasExplicitTierSelection, setHasExplicitTierSelection] = useState(false);
 
   useDocumentTitle(language === 'el' ? 'Elite Memoriz | Αρχική' : 'Elite Memoriz | Home');
 
@@ -210,11 +211,24 @@ const LandingPage = () => {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const redirectTo = `/create-event?tier=${encodeURIComponent(selectedTier)}`;
-  const encodedRedirectTo = encodeURIComponent(redirectTo);
+  const selectTier = (tier: Tier) => {
+    setSelectedTier(tier);
+    setHasExplicitTierSelection(true);
+  };
 
-  const continueToRegister = () => navigate(`/register?redirectTo=${encodedRedirectTo}`);
-  const continueToLogin = () => navigate(`/login?redirectTo=${encodedRedirectTo}`);
+  const selectedTierRedirectTo = `/create-event?tier=${encodeURIComponent(selectedTier)}`;
+  const encodedSelectedTierRedirectTo = encodeURIComponent(selectedTierRedirectTo);
+
+  const goToRegister = () => navigate('/register');
+  const goToLogin = () => navigate('/login');
+  const continueToSelectedTierRegister = () => {
+    if (!hasExplicitTierSelection) {
+      goToRegister();
+      return;
+    }
+
+    navigate(`/register?redirectTo=${encodedSelectedTierRedirectTo}`);
+  };
 
   return (
     <div className="min-h-screen bg-[#f8f3eb] font-sans text-stone-900 selection:bg-amber-200">
@@ -274,14 +288,14 @@ const LandingPage = () => {
               <div className="hidden items-center gap-2 sm:flex">
                 <button
                   type="button"
-                  onClick={continueToLogin}
+                  onClick={goToLogin}
                   className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-50"
                 >
                   {pageCopy.nav.login}
                 </button>
                 <button
                   type="button"
-                  onClick={continueToRegister}
+                  onClick={goToRegister}
                   className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-stone-700"
                 >
                   {pageCopy.nav.register}
@@ -294,14 +308,14 @@ const LandingPage = () => {
           <div className="flex justify-center gap-2 pb-3 sm:hidden">
             <button
               type="button"
-              onClick={continueToRegister}
+              onClick={goToRegister}
               className="rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white"
             >
               {pageCopy.nav.register}
             </button>
             <button
               type="button"
-              onClick={continueToLogin}
+              onClick={goToLogin}
               className="rounded-full border border-stone-200 bg-white px-5 py-2.5 text-sm font-semibold text-stone-700"
             >
               {pageCopy.nav.login}
@@ -345,7 +359,7 @@ const LandingPage = () => {
                 <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
-                    onClick={continueToRegister}
+                    onClick={goToRegister}
                     className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-stone-950 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-stone-950/20 transition-all hover:bg-stone-800 hover:shadow-xl hover:shadow-stone-950/25"
                   >
                     {pageCopy.hero.primary}
@@ -400,7 +414,7 @@ const LandingPage = () => {
                     <button
                       key={tier}
                       type="button"
-                      onClick={() => setSelectedTier(tier)}
+                      onClick={() => selectTier(tier)}
                       className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all ${
                         selectedTier === tier
                           ? 'bg-white text-stone-900 shadow-sm'
@@ -440,7 +454,7 @@ const LandingPage = () => {
                 {/* Primary CTA */}
                 <button
                   type="button"
-                  onClick={continueToRegister}
+                  onClick={continueToSelectedTierRegister}
                   className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-base font-semibold text-white transition-colors hover:bg-stone-800"
                 >
                   {pageCopy.continueWith}
@@ -582,7 +596,7 @@ const LandingPage = () => {
                 return (
                   <article
                     key={tier}
-                    onClick={() => setSelectedTier(tier)}
+                    onClick={() => selectTier(tier)}
                     className={`relative cursor-pointer rounded-3xl border p-8 shadow-lg transition-all duration-200 ${
                       isSelected
                         ? 'border-stone-950 bg-stone-950 text-white shadow-stone-950/20'
@@ -635,7 +649,7 @@ const LandingPage = () => {
 
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setSelectedTier(tier); }}
+                      onClick={(e) => { e.stopPropagation(); selectTier(tier); }}
                       className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-base font-semibold transition-colors ${
                         isSelected
                           ? 'bg-white text-stone-950 hover:bg-stone-100'
@@ -662,7 +676,7 @@ const LandingPage = () => {
               </div>
               <button
                 type="button"
-                onClick={continueToRegister}
+                onClick={continueToSelectedTierRegister}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-950 px-7 py-4 text-base font-semibold text-white transition-colors hover:bg-stone-800"
               >
                 {pageCopy.continueWith}
@@ -722,7 +736,7 @@ const LandingPage = () => {
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={continueToRegister}
+                onClick={goToRegister}
                 className="group inline-flex items-center justify-center gap-2.5 rounded-full bg-stone-950 px-9 py-4 text-lg font-semibold text-white shadow-xl shadow-stone-950/20 transition-all hover:bg-stone-800"
               >
                 {pageCopy.continueWith}
@@ -730,7 +744,7 @@ const LandingPage = () => {
               </button>
               <button
                 type="button"
-                onClick={continueToLogin}
+                onClick={goToLogin}
                 className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white/70 px-9 py-4 text-lg font-semibold text-stone-800 backdrop-blur-sm transition-colors hover:bg-white"
               >
                 {pageCopy.nav.login}
