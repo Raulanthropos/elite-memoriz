@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
@@ -67,6 +67,7 @@ const Register = () => {
   const [email, setEmail] = useState(getStoredAuthEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<PublicLanguage>(getStoredPublicLanguage);
@@ -81,6 +82,7 @@ const Register = () => {
   const pageCopy = copy[language];
   const passwordRequirements = getPasswordRequirements(password);
   const passwordRequirementKeys = Object.keys(pageCopy.requirements) as PasswordRequirementKey[];
+  const confirmPasswordInputRef = useRef<HTMLInputElement>(null);
 
   useDocumentTitle(language === 'el' ? 'Elite Memoriz | Εγγραφή Host' : 'Elite Memoriz | Register');
 
@@ -128,11 +130,14 @@ const Register = () => {
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setConfirmPasswordError(null);
     const normalizedEmail = normalizeAuthEmail(email);
     setStoredAuthEmail(normalizedEmail);
 
     if (password !== confirmPassword) {
       setError(pageCopy.mismatch);
+      setConfirmPasswordError(pageCopy.mismatch);
+      confirmPasswordInputRef.current?.focus();
       return;
     }
 
@@ -185,8 +190,13 @@ const Register = () => {
 
   const errorMessageId = 'register-error-message';
   const passwordRequirementsId = 'register-password-requirements';
+  const confirmPasswordErrorId = 'register-confirm-error';
   const errorDescribedBy = error ? errorMessageId : undefined;
   const passwordDescribedBy = error ? `${passwordRequirementsId} ${errorMessageId}` : passwordRequirementsId;
+  const confirmPasswordDescribedBy = [
+    confirmPasswordError ? confirmPasswordErrorId : null,
+    errorDescribedBy,
+  ].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6">
@@ -241,7 +251,10 @@ const Register = () => {
                     aria-invalid={Boolean(error)}
                     aria-describedby={passwordDescribedBy}
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      setConfirmPasswordError(null);
+                    }}
                     className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-indigo-500"
                   />
                   <div id={passwordRequirementsId} className="mt-3 rounded-lg border border-gray-800 bg-gray-950/70 p-3">
@@ -264,17 +277,26 @@ const Register = () => {
                 <div>
                   <label htmlFor="register-confirm" className="mb-1 block text-sm font-medium text-gray-300">{pageCopy.confirm}</label>
                   <input
+                    ref={confirmPasswordInputRef}
                     id="register-confirm"
                     type="password"
                     autoComplete="new-password"
                     required
                     minLength={8}
-                    aria-invalid={Boolean(error)}
-                    aria-describedby={errorDescribedBy}
+                    aria-invalid={Boolean(confirmPasswordError || error)}
+                    aria-describedby={confirmPasswordDescribedBy}
                     value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    onChange={(event) => {
+                      setConfirmPassword(event.target.value);
+                      setConfirmPasswordError(null);
+                    }}
                     className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-indigo-500"
                   />
+                  {confirmPasswordError && (
+                    <p id={confirmPasswordErrorId} className="mt-2 text-sm text-red-400">
+                      {confirmPasswordError}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
