@@ -33,7 +33,7 @@ const DOT_BG: React.CSSProperties = {
 
 const copy = {
   el: {
-    nav: { how: 'Πως λειτουργεί', plans: 'Πακέτα', login: 'Σύνδεση host', register: 'Εγγραφή host' },
+    nav: { how: 'Πως λειτουργεί', plans: 'Πακέτα', about: 'Σχετικά με εμάς', login: 'Σύνδεση host', register: 'Εγγραφή host' },
     hero: {
       badge: 'Χωρίς app για τους καλεσμένους',
       title: 'Το ιδιωτικό album που γεμίζει',
@@ -105,12 +105,19 @@ const copy = {
       ['Η επιλογή tier εδώ είναι οριστική;', 'Όχι. Εδώ βλέπεις τα πακέτα και η τελική επιλογή γίνεται μέσα στο Create Event.'],
       ['Αν δεν είμαι συνδεδεμένος;', 'Ξεκινάς με host registration, μετά στήνεις το event, διαλέγεις πακέτο και τέλος προχωράς στο payment βήμα.'],
     ],
+    aboutTitle: 'Σχετικά με εμάς',
+    aboutBody: [
+      'Το Elite Memoriz δεν είναι απλώς μια υπηρεσία. Είναι ένας νέος τρόπος να ζεις και να ξαναζείς τις πιο σημαντικές στιγμές της ζωής σου.',
+      'Μέσα από μοναδικές ψηφιακές εμπειρίες, κάθε εκδήλωση αποκτά τη δική της "ζωντανή μνήμη". Με ένα απλό scan, οι καλεσμένοι συμμετέχουν, μοιράζονται φωτογραφίες, βίντεο και ευχές, δημιουργώντας ένα συλλογικό αποτύπωμα συναισθημάτων.',
+      'Η τεχνολογία συναντά την τέχνη: οι στιγμές μετατρέπονται σε ιστορίες, σε κινηματογραφικά βίντεο, σε διαδραστικές εμπειρίες που εξελίσσονται με τον χρόνο. Από weddings και private celebrations μέχρι corporate events, κάθε περίσταση αποκτά βάθος, διάρκεια και αξία.',
+      'Γιατί στο Elite Memoriz, οι στιγμές σας δεν αποθηκεύονται απλώς - ζωντανεύουν.',
+    ],
     finalTitle: 'Ξεκίνα με registration-first flow',
     finalBody: 'Κάνε πρώτα host registration και μετά οδήγησε τον host σε μια καθαρή διαδρομή: Create Event, επιλογή πακέτου και payment.',
     footer: 'Όλα τα δικαιώματα διατηρούνται.',
   },
   en: {
-    nav: { how: 'How it works', plans: 'Plans', login: 'Host sign in', register: 'Host register' },
+    nav: { how: 'How it works', plans: 'Plans', about: 'About Us', login: 'Host sign in', register: 'Host register' },
     hero: {
       badge: 'No app required for guests',
       title: 'The private album that fills',
@@ -182,6 +189,13 @@ const copy = {
       ['Is the plan choice final here?', 'No. The homepage is for comparison, and the final plan choice happens inside Create Event.'],
       ['What if I am not signed in?', 'Start with host registration, then create the event, choose a plan, and continue to payment.'],
     ],
+    aboutTitle: 'About Us',
+    aboutBody: [
+      'Elite Memoriz is not just a service. It is a new way to experience and relive life\'s most meaningful moments.',
+      'Through unique digital experiences, every event becomes a living memory. With a simple scan, guests can participate, sharing photos, videos, and wishes, creating a collective imprint of emotions.',
+      'Technology meets artistry: moments are transformed into stories, cinematic videos, and interactive experiences that evolve over time. From weddings and private celebrations to corporate events, every occasion gains depth, longevity, and meaning.',
+      'Because at Elite Memoriz, your moments are not simply stored; they come to life.',
+    ],
     finalTitle: 'Start with a registration-first flow',
     finalBody: 'Begin with host registration, then guide the host through Create Event, plan selection, and payment in one clear path.',
     footer: 'All rights reserved.',
@@ -247,6 +261,13 @@ const LandingPage = () => {
                 className="text-sm font-semibold uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900"
               >
                 {pageCopy.nav.plans}
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection('about-us')}
+                className="text-sm font-semibold uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900"
+              >
+                {pageCopy.nav.about}
               </button>
             </nav>
 
@@ -694,6 +715,40 @@ const LandingPage = () => {
                   <p className="mt-4 text-base leading-7 text-stone-400">{answer}</p>
                 </article>
               ))}
+            </div>
+
+            <div
+              id="about-us"
+              className="mt-16 rounded-3xl border border-white/10 bg-white/[0.07] p-8 shadow-2xl shadow-black/20 sm:p-10 lg:p-12"
+            >
+              <div className="grid gap-10 lg:grid-cols-[0.45fr_1fr] lg:items-start">
+                <div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px w-10 bg-amber-400/60" />
+                    <span className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-400/80">
+                      Elite Memoriz
+                    </span>
+                  </div>
+                  <h2 className="font-serif text-4xl font-semibold leading-tight text-white md:text-5xl">
+                    {pageCopy.aboutTitle}
+                  </h2>
+                </div>
+
+                <div className="space-y-5">
+                  {pageCopy.aboutBody.map((paragraph, index) => (
+                    <p
+                      key={paragraph}
+                      className={`text-base leading-8 text-stone-300 ${
+                        index === pageCopy.aboutBody.length - 1
+                          ? 'font-serif text-2xl leading-9 text-amber-100'
+                          : ''
+                      }`}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </div>
             </div>
 
           </div>
