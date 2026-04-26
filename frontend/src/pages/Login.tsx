@@ -203,6 +203,13 @@ const Login = () => {
     }
   };
 
+  const errorMessageId = 'login-error-message';
+  const passwordRequirementsId = 'login-password-requirements';
+  const errorDescribedBy = error ? errorMessageId : undefined;
+  const passwordDescribedBy = isRegistering
+    ? (error ? `${passwordRequirementsId} ${errorMessageId}` : passwordRequirementsId)
+    : errorDescribedBy;
+
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-6">
       <div className="mx-auto max-w-md">
@@ -231,7 +238,11 @@ const Login = () => {
           </div>
 
           {error && (
-            <div className="rounded-md border border-red-800 bg-red-900/50 p-4 text-sm text-red-200">
+            <div
+              id={errorMessageId}
+              role="alert"
+              className="rounded-md border border-red-800 bg-red-900/50 p-4 text-sm text-red-200"
+            >
               {error}
             </div>
           )}
@@ -245,6 +256,8 @@ const Login = () => {
                   type="email"
                   autoComplete="email"
                   required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={errorDescribedBy}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
@@ -260,12 +273,14 @@ const Login = () => {
                   autoComplete={isRegistering ? 'new-password' : 'current-password'}
                   required
                   minLength={isRegistering ? 8 : undefined}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={passwordDescribedBy}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
                 />
                 {isRegistering && (
-                  <div className="mt-3 rounded-lg border border-gray-800 bg-gray-950/70 p-3">
+                  <div id={passwordRequirementsId} className="mt-3 rounded-lg border border-gray-800 bg-gray-950/70 p-3">
                     <p className="text-xs font-medium text-gray-400">{pageCopy.passwordHint}</p>
                     <ul className="mt-3 space-y-2">
                       {passwordRequirementKeys.map((requirementKey) => {
@@ -293,6 +308,8 @@ const Login = () => {
                     autoComplete="new-password"
                     required
                     minLength={8}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={errorDescribedBy}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
