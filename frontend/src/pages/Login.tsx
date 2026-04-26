@@ -102,10 +102,6 @@ const Login = () => {
   }, [language]);
 
   useEffect(() => {
-    setStoredAuthEmail(email);
-  }, [email]);
-
-  useEffect(() => {
     let isActive = true;
 
     const syncAuthenticatedUser = async () => {

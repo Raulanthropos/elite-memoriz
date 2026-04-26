@@ -1,4 +1,5 @@
 export const normalizeAuthEmail = (value: string) => value.trim().toLowerCase();
+export const isValidAuthEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeAuthEmail(value));
 
 const AUTH_EMAIL_STORAGE_KEY = 'elite-memoriz-auth-email';
 const hasWindow = () => typeof window !== 'undefined';
@@ -8,7 +9,8 @@ export const getStoredAuthEmail = () => {
     return '';
   }
 
-  return window.localStorage.getItem(AUTH_EMAIL_STORAGE_KEY) ?? '';
+  const storedEmail = window.localStorage.getItem(AUTH_EMAIL_STORAGE_KEY) ?? '';
+  return isValidAuthEmail(storedEmail) ? storedEmail : '';
 };
 
 export const setStoredAuthEmail = (value: string) => {
@@ -16,8 +18,8 @@ export const setStoredAuthEmail = (value: string) => {
     return;
   }
 
-  const normalizedValue = value.trim();
-  if (!normalizedValue) {
+  const normalizedValue = normalizeAuthEmail(value);
+  if (!normalizedValue || !isValidAuthEmail(normalizedValue)) {
     window.localStorage.removeItem(AUTH_EMAIL_STORAGE_KEY);
     return;
   }

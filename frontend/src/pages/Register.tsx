@@ -89,10 +89,6 @@ const Register = () => {
   }, [language]);
 
   useEffect(() => {
-    setStoredAuthEmail(email);
-  }, [email]);
-
-  useEffect(() => {
     if (import.meta.env.DEV && existingAccountRedirectPath !== redirectPath) {
       console.debug('[Register] Redirecting existing-account sign-in to dashboard instead of payment.', {
         requestedRedirect,
@@ -132,6 +128,8 @@ const Register = () => {
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    const normalizedEmail = normalizeAuthEmail(email);
+    setStoredAuthEmail(normalizedEmail);
 
     if (password !== confirmPassword) {
       setError(pageCopy.mismatch);
@@ -146,8 +144,6 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const normalizedEmail = normalizeAuthEmail(email);
-      setStoredAuthEmail(normalizedEmail);
       const { data, error: authError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
