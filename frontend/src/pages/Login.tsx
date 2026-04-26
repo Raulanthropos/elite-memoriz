@@ -228,7 +228,7 @@ const Login = () => {
 
         <div className="space-y-8 rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-2xl">
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white">{pageCopy.brand}</h2>
+            <h1 className="text-3xl font-bold tracking-tight text-white">{pageCopy.brand}</h1>
             <p className="mt-2 text-sm text-gray-400">
               {isRegistering ? pageCopy.subtitleRegister : pageCopy.subtitleLogin}
             </p>

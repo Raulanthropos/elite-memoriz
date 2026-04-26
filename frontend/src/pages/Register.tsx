@@ -201,7 +201,7 @@ const Register = () => {
 
         <div className="space-y-8 rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-xl">
           <div className="text-center">
-            <h2 className="mb-2 text-3xl font-bold text-white">{pageCopy.title}</h2>
+            <h1 className="mb-2 text-3xl font-bold text-white">{pageCopy.title}</h1>
             <p className="text-gray-400">{pageCopy.subtitle}</p>
           </div>
 
